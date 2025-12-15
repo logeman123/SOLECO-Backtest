@@ -1,0 +1,84 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SOLECO Backtester</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'system-ui', 'sans-serif'],
+              mono: ['JetBrains Mono', 'Menlo', 'monospace'],
+            },
+            colors: {
+              // THE LORE DESIGN SYSTEM PALETTE
+              lore: {
+                base: '#09090b',      // Main background (Zinc 950)
+                surface: '#18181b',   // Card background (Zinc 900)
+                highlight: '#27272a', // Hover states (Zinc 800)
+                border: '#3f3f46',    // Borders (Zinc 700)
+                muted: '#71717a',     // Muted text (Zinc 500)
+                text: '#e4e4e7',      // Primary text (Zinc 200)
+                
+                // Brand Accents (Electric Teal/Cyan)
+                primary: {
+                  DEFAULT: '#14b8a6',
+                  dim: 'rgba(20, 184, 166, 0.1)',
+                  glow: '#5eead4',
+                },
+                
+                // Status Colors
+                success: '#10b981',
+                error: '#f43f5e',
+                warning: '#f59e0b',
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+      body {
+        background-color: #09090b;
+        color: #e4e4e7;
+      }
+
+      /* Custom Scrollbar to match Lore Theme */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #09090b; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #3f3f46; 
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #71717a; 
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.4.1"
+  }
+}
+</script>
+</head>
+  <body class="antialiased selection:bg-lore-primary-dim selection:text-lore-primary-glow">
+    <div id="root"></div>
+  </body>
+</html>

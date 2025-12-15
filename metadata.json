@@ -1,0 +1,5 @@
+{
+  "name": "SOLECO Backtester",
+  "description": "A professional quantitative backtesting dashboard for the Solana Ecosystem Index (SOLECO), featuring configurable methodology parameters and real-time risk/return visualization.",
+  "requestFramePermissions": []
+}
