@@ -35,10 +35,7 @@ const REAL_SOLANA_ASSETS: MockAssetBase[] = [
   // 7. TRUMP
   { symbol: 'TRUMP', name: 'Official Trump', basePrice: 4.0, baseMcap: 150e6, avgDailyVol: 10e6, isNative: true, category: 'Meme' },
 
-  // 8. BILLY (Replacing generic meme slot to match mid-caps)
-  { symbol: 'BILLY', name: 'Billy', basePrice: 0.15, baseMcap: 150e6, avgDailyVol: 10e6, isNative: true, category: 'Meme' },
-
-  // 9. ORCA
+  // 8. ORCA
   { symbol: 'ORCA', name: 'Orca', basePrice: 2.1, baseMcap: 110e6, avgDailyVol: 5e6, isNative: true, category: 'DeFi' },
 
   // 10. POPCAT
@@ -58,7 +55,7 @@ const REAL_SOLANA_ASSETS: MockAssetBase[] = [
   { symbol: 'JITOSOL', name: 'Jito Staked SOL', basePrice: 160, baseMcap: 2.5e9, avgDailyVol: 60e6, isNative: true, category: 'LST' },
   
   // --- Other High Profile for Context ---
-  { symbol: 'RNDR', name: 'Render', basePrice: 7.5, baseMcap: 3.5e9, avgDailyVol: 100e6, isNative: true, category: 'DePIN' },
+  { symbol: 'RENDER', name: 'Render', basePrice: 7.5, baseMcap: 3.5e9, avgDailyVol: 100e6, isNative: true, category: 'DePIN' },
   { symbol: 'WIF', name: 'dogwifhat', basePrice: 2.5, baseMcap: 2.5e9, avgDailyVol: 400e6, isNative: true, category: 'Meme' },
   { symbol: 'BONK', name: 'Bonk', basePrice: 0.000025, baseMcap: 1.5e9, avgDailyVol: 150e6, isNative: true, category: 'Meme' },
   { symbol: 'HNT', name: 'Helium', basePrice: 4.2, baseMcap: 800e6, avgDailyVol: 15e6, isNative: true, category: 'DePIN' },
@@ -70,7 +67,6 @@ const REAL_SOLANA_ASSETS: MockAssetBase[] = [
   { symbol: 'FARTCOIN', name: 'Fartcoin', basePrice: 0.04, baseMcap: 30e6, avgDailyVol: 800000, isNative: true, category: 'Meme' },
   { symbol: 'PNUT', name: 'Peanut the Squirrel', basePrice: 0.1, baseMcap: 80e6, avgDailyVol: 5e6, isNative: true, category: 'Meme' },
   { symbol: 'W', name: 'Wormhole', basePrice: 0.35, baseMcap: 900e6, avgDailyVol: 35e6, isNative: false, category: 'Infra' },
-  { symbol: 'USDC', name: 'USDC', basePrice: 1, baseMcap: 30e9, avgDailyVol: 1e9, isNative: false, category: 'Stablecoin' },
 ];
 
 // Helper: Generate date array

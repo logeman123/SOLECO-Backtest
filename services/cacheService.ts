@@ -109,6 +109,7 @@ class CacheService {
       });
     } catch (error) {
       console.warn('Cache set failed:', error);
+      return Promise.resolve();
     }
   }
 
@@ -133,6 +134,7 @@ class CacheService {
       });
     } catch (error) {
       console.warn('Cache delete failed:', error);
+      return Promise.resolve();
     }
   }
 
@@ -151,6 +153,7 @@ class CacheService {
       });
     } catch (error) {
       console.warn('Cache clear failed:', error);
+      return Promise.resolve();
     }
   }
 
