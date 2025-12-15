@@ -1,14 +1,51 @@
 // API configuration and feature flags
 
+const STORAGE_KEY = 'soleco_coingecko_api_key';
+
+// Runtime API key storage
+let runtimeApiKey: string | null = null;
+
+// Load from localStorage on init
+if (typeof window !== 'undefined') {
+  runtimeApiKey = localStorage.getItem(STORAGE_KEY);
+}
+
 export const API_CONFIG = {
   // CoinGecko Pro API base URL
   COINGECKO_BASE_URL: 'https://pro-api.coingecko.com/api/v3',
 
-  // Get API key from environment
-  getApiKey: (): string => import.meta.env.VITE_COINGECKO_API_KEY || '',
+  // Get API key (runtime/localStorage only - no env vars for Vercel deployment)
+  getApiKey: (): string => {
+    return runtimeApiKey || '';
+  },
+
+  // Set API key at runtime and persist to localStorage
+  setApiKey: (key: string): void => {
+    runtimeApiKey = key;
+    if (typeof window !== 'undefined') {
+      if (key) {
+        localStorage.setItem(STORAGE_KEY, key);
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+  },
+
+  // Check if API key is configured (localStorage only)
+  hasApiKey: (): boolean => {
+    return !!runtimeApiKey;
+  },
+
+  // Clear stored API key
+  clearApiKey: (): void => {
+    runtimeApiKey = null;
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  },
 
   // Feature flags
-  USE_REAL_DATA: import.meta.env.VITE_USE_REAL_DATA === 'true',
+  USE_REAL_DATA: true, // Always try real data if API key is available
   ENABLE_CACHING: true,
 
   // Cache TTL: 24 hours for historical data

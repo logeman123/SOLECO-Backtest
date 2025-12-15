@@ -48,7 +48,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
     const newErrors: Record<string, string> = {};
     if (isNaN(newConfig.numAssets)) newErrors.numAssets = "Required";
     else if (newConfig.numAssets < 2) newErrors.numAssets = "Min 2";
-    else if (newConfig.numAssets > 100) newErrors.numAssets = "Max 100";
+    else if (newConfig.numAssets > 25) newErrors.numAssets = "Max 25";
     if (isNaN(newConfig.maxWeight)) newErrors.maxWeight = "Required";
     else if (newConfig.maxWeight > 1.0) newErrors.maxWeight = "Max 100%";
     else if (newConfig.maxWeight <= 0) newErrors.maxWeight = "> 0%";
@@ -139,7 +139,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     <input
                         type="range"
                         min="2"
-                        max="50"
+                        max="25"
                         step="1"
                         className="w-full h-1.5 bg-lore-highlight rounded-lg appearance-none cursor-pointer accent-lore-primary hover:accent-lore-primary-glow"
                         value={safeValue(config.numAssets)}

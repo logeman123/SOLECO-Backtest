@@ -462,19 +462,13 @@ export const runBacktest = async (
   // Get all available symbols from price data
   const availableSymbols = Array.from(priceData.keys());
 
-  // Find the common date range across all assets
-  const allDates = new Set<string>();
-  let minDates: string[] | null = null;
-
-  for (const [symbol, data] of priceData.entries()) {
-    if (minDates === null || data.dates.length < minDates.length) {
-      minDates = data.dates;
-    }
-    data.dates.forEach(d => allDates.add(d));
+  // Use SOL (benchmark) dates as reference since it has full history
+  // This allows newer tokens to be included with forward-fill for missing early dates
+  const solData = priceData.get('SOL');
+  if (!solData) {
+    throw new Error('SOL data required for benchmark');
   }
-
-  // Use the shortest date array to ensure all assets have data for all dates
-  const dates = minDates || [];
+  const dates = solData.dates;
 
   // Trim to backtest window
   const monthMap: Record<string, number> = { '6M': 6, '12M': 12, '24M': 24, '36M': 36 };
@@ -688,8 +682,8 @@ export const runBacktest = async (
   }).sort((a, b) => b.currentWeight - a.currentWeight);
 
   // Benchmark: SOL
-  const solData = assetDataMap['SOL'];
-  const solPrices = solData?.prices || [];
+  const solBenchmarkData = assetDataMap['SOL'];
+  const solPrices = solBenchmarkData?.prices || [];
   const solStartPrice = solPrices[0] || 1;
   const benchmarkNav = solPrices.map(p => (p / solStartPrice) * 100);
   const benchmarkStats = calculateStats(benchmarkNav);

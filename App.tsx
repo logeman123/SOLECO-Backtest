@@ -9,7 +9,8 @@ import StatsCard from './components/StatsCard';
 import PerformanceChart from './components/PerformanceChart';
 import ConstituentAnalysis from './components/ConstituentAnalysis';
 import OptimizerPanel from './components/OptimizerPanel';
-import { LayoutDashboard, PenTool, BarChart3, Briefcase, Trash2, Calendar, PieChart, Info } from 'lucide-react';
+import ApiKeyModal from './components/ApiKeyModal';
+import { LayoutDashboard, PenTool, BarChart3, Briefcase, Trash2, Calendar, PieChart, Info, Key } from 'lucide-react';
 
 type ViewMode = 'dashboard' | 'creator' | 'portfolio';
 
@@ -23,7 +24,7 @@ const DEFAULT_CONFIG: BacktestConfig = {
 
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
-  
+
   const [dashboardConfig, setDashboardConfig] = useState<BacktestConfig>(DEFAULT_CONFIG);
   const [creatorConfig, setCreatorConfig] = useState<BacktestConfig>(DEFAULT_CONFIG);
   const activeConfig = viewMode === 'dashboard' ? dashboardConfig : creatorConfig;
@@ -36,6 +37,10 @@ const App: React.FC = () => {
   const [fetchProgress, setFetchProgress] = useState<FetchProgress | null>(null);
 
   const [deployedStrategies, setDeployedStrategies] = useState<DeployedStrategy[]>([]);
+
+  // API Key Modal state
+  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(!API_CONFIG.hasApiKey());
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
 
   const handleRunBacktest = async (cfg: BacktestConfig) => {
     setIsLoading(true);
@@ -93,6 +98,41 @@ const App: React.FC = () => {
     setError('Cache cleared - next run will fetch fresh data');
   };
 
+  const handleApiKeySubmit = async (apiKey: string) => {
+    setApiKeyError(null);
+    API_CONFIG.setApiKey(apiKey);
+
+    // Validate by making a test request
+    try {
+      const testUrl = `${API_CONFIG.COINGECKO_BASE_URL}/ping`;
+      const response = await fetch(testUrl, {
+        headers: { 'x-cg-pro-api-key': apiKey },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Invalid API key (status ${response.status})`);
+      }
+
+      setShowApiKeyModal(false);
+      // Run backtest with real data
+      handleRunBacktest(DEFAULT_CONFIG);
+    } catch (err) {
+      API_CONFIG.clearApiKey();
+      setApiKeyError(err instanceof Error ? err.message : 'Failed to validate API key');
+    }
+  };
+
+  const handleApiKeySkip = () => {
+    setShowApiKeyModal(false);
+    // Run backtest with mock data
+    handleRunBacktest(DEFAULT_CONFIG);
+  };
+
+  const handleChangeApiKey = () => {
+    setShowApiKeyModal(true);
+    setApiKeyError(null);
+  };
+
   const handleTabChange = (mode: ViewMode) => {
       setViewMode(mode);
       if (mode === 'dashboard') handleRunBacktest(dashboardConfig);
@@ -134,7 +174,10 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    handleRunBacktest(DEFAULT_CONFIG);
+    // Only auto-run if API key modal is not showing
+    if (!showApiKeyModal) {
+      handleRunBacktest(DEFAULT_CONFIG);
+    }
   }, []);
 
   const chartData: ChartDataPoint[] = useMemo(() => {
@@ -149,7 +192,16 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-lore-base text-lore-text font-sans flex flex-col relative selection:bg-lore-primary/20">
-      
+
+      {/* API Key Modal */}
+      {showApiKeyModal && (
+        <ApiKeyModal
+          onSubmit={handleApiKeySubmit}
+          onSkip={handleApiKeySkip}
+          error={apiKeyError}
+        />
+      )}
+
       {/* Header */}
       <header className="bg-lore-base/95 backdrop-blur border-b border-lore-border h-16 flex items-center px-6 z-50 sticky top-0 justify-between">
         <div className="flex items-center gap-3 w-48">
@@ -202,11 +254,17 @@ const App: React.FC = () => {
             </button>
         </div>
 
-        <div className="w-48 flex justify-end">
-             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-lore-surface border border-lore-border">
-                <div className="w-1.5 h-1.5 rounded-full bg-lore-success animate-pulse"></div>
-                <span className="text-[10px] text-lore-muted font-mono uppercase tracking-widest">System Operational</span>
-            </div>
+        <div className="w-48 flex justify-end gap-2">
+             <button
+               onClick={handleChangeApiKey}
+               className="flex items-center gap-2 px-3 py-1 rounded-full bg-lore-surface border border-lore-border hover:border-lore-primary/50 transition-colors"
+               title="Change API Key"
+             >
+                <Key size={12} className={API_CONFIG.hasApiKey() ? 'text-lore-success' : 'text-lore-muted'} />
+                <span className="text-[10px] text-lore-muted font-mono uppercase tracking-widest">
+                  {API_CONFIG.hasApiKey() ? 'API Key Set' : 'No API Key'}
+                </span>
+            </button>
         </div>
       </header>
 
