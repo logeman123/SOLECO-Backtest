@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { BacktestConfig, BacktestResponse, ChartDataPoint, DeployedStrategy } from './types';
-import { runMockBacktest } from './services/mockBackend';
+import { runMockBacktest, runBacktest } from './services/mockBackend';
+import { fetchAllAssetData, clearCache, getAllSymbols } from './services/coingeckoService';
+import { BACKTEST_WINDOW_TO_DAYS, API_CONFIG } from './config/apiConfig';
+import { DataSource, FetchProgress } from './types/coingecko';
 import ConfigPanel from './components/ConfigPanel';
 import StatsCard from './components/StatsCard';
 import PerformanceChart from './components/PerformanceChart';
@@ -29,21 +32,65 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isOptimizerOpen, setIsOptimizerOpen] = useState(false);
+  const [dataSource, setDataSource] = useState<DataSource>('mock');
+  const [fetchProgress, setFetchProgress] = useState<FetchProgress | null>(null);
 
   const [deployedStrategies, setDeployedStrategies] = useState<DeployedStrategy[]>([]);
 
   const handleRunBacktest = async (cfg: BacktestConfig) => {
     setIsLoading(true);
     setError(null);
+    setFetchProgress(null);
+
     try {
-      const response = await runMockBacktest(cfg);
-      setResult(response);
+      // Check if we should use real data
+      const useRealData = API_CONFIG.USE_REAL_DATA && API_CONFIG.getApiKey();
+
+      if (useRealData) {
+        // Fetch real data from CoinGecko
+        const days = BACKTEST_WINDOW_TO_DAYS[cfg.backtestWindow] || 365;
+        const symbols = getAllSymbols();
+
+        try {
+          const { data: priceData, source } = await fetchAllAssetData(symbols, days, {
+            onProgress: setFetchProgress,
+          });
+
+          setDataSource(source);
+
+          // Run backtest with real data
+          const response = await runBacktest(cfg, priceData);
+          setResult(response);
+
+          if (source === 'mock') {
+            setError('Some data unavailable - using simulated values for missing assets');
+          }
+        } catch (fetchErr) {
+          console.warn('Real data fetch failed, falling back to mock:', fetchErr);
+          // Fall back to mock data
+          const response = await runMockBacktest(cfg);
+          setResult(response);
+          setDataSource('mock');
+          setError('Using simulated data - real data unavailable');
+        }
+      } else {
+        // Use mock data
+        const response = await runMockBacktest(cfg);
+        setResult(response);
+        setDataSource('mock');
+      }
     } catch (err) {
       console.error(err);
       setError("Failed to run simulation. Please try again.");
     } finally {
       setIsLoading(false);
+      setFetchProgress(null);
     }
+  };
+
+  const handleClearCache = async () => {
+    await clearCache();
+    setError('Cache cleared - next run will fetch fresh data');
   };
 
   const handleTabChange = (mode: ViewMode) => {
@@ -167,15 +214,19 @@ const App: React.FC = () => {
       <div className={`sticky top-16 z-40 transition-all duration-300 ease-in-out ${
           (viewMode === 'dashboard' || viewMode === 'creator') ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none h-0'
         }`}>
-        <ConfigPanel 
+        <ConfigPanel
           mode={viewMode as 'dashboard' | 'creator'}
-          config={activeConfig} 
-          setConfig={viewMode === 'dashboard' ? setDashboardConfig : setCreatorConfig} 
-          onRun={() => handleRunBacktest(activeConfig)} 
+          config={activeConfig}
+          setConfig={viewMode === 'dashboard' ? setDashboardConfig : setCreatorConfig}
+          onRun={() => handleRunBacktest(activeConfig)}
           isLoading={isLoading}
           onToggleOptimizer={() => setIsOptimizerOpen(!isOptimizerOpen)}
           isOptimizerOpen={isOptimizerOpen}
           onDeploy={handleQuickDeploy}
+          dataSource={dataSource}
+          fetchProgress={fetchProgress}
+          error={error}
+          onClearCache={handleClearCache}
         />
       </div>
 

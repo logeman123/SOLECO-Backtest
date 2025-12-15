@@ -1,7 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { BacktestConfig } from '../types';
-import { Play, RefreshCw, AlertCircle, ChevronDown, Save, FlaskConical, Sliders, Activity } from 'lucide-react';
+import { DataSource, FetchProgress } from '../types/coingecko';
+import { Play, RefreshCw, AlertCircle, ChevronDown, Save, FlaskConical, Sliders, Activity, Database, Wifi, WifiOff, Trash2 } from 'lucide-react';
 
 interface ConfigPanelProps {
   mode: 'dashboard' | 'creator';
@@ -9,14 +10,39 @@ interface ConfigPanelProps {
   setConfig: (config: BacktestConfig) => void;
   onRun: () => void;
   isLoading: boolean;
-  onToggleOptimizer: () => void; 
-  isOptimizerOpen: boolean; 
+  onToggleOptimizer: () => void;
+  isOptimizerOpen: boolean;
   onDeploy: () => void;
+  dataSource?: DataSource;
+  fetchProgress?: FetchProgress | null;
+  error?: string | null;
+  onClearCache?: () => void;
 }
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ mode, config, setConfig, onRun, isLoading, onToggleOptimizer, isOptimizerOpen, onDeploy }) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({
+  mode,
+  config,
+  setConfig,
+  onRun,
+  isLoading,
+  onToggleOptimizer,
+  isOptimizerOpen,
+  onDeploy,
+  dataSource = 'mock',
+  fetchProgress,
+  error,
+  onClearCache,
+}) => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const isDashboard = mode === 'dashboard';
+
+  // Data source indicator configuration
+  const dataSourceConfig = {
+    real: { color: 'bg-lore-success', label: 'Live Data', icon: Wifi },
+    cached: { color: 'bg-lore-warning', label: 'Cached Data', icon: Database },
+    mock: { color: 'bg-lore-muted', label: 'Simulated', icon: WifiOff },
+  };
+  const sourceInfo = dataSourceConfig[dataSource];
 
   const validate = (newConfig: BacktestConfig) => {
     const newErrors: Record<string, string> = {};
@@ -62,6 +88,24 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ mode, config, setConfig, onRu
                 <h2 className="text-xs font-bold text-white uppercase tracking-wide">{isDashboard ? 'Live Methodology' : 'Strategy Workbench'}</h2>
                 <p className="text-[10px] text-lore-muted">{isDashboard ? 'Parameters & Constraints' : 'Research & Execution'}</p>
              </div>
+          </div>
+
+          {/* DATA SOURCE INDICATOR */}
+          <div className="flex items-center gap-2 shrink-0 hidden lg:flex">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-lore-base border border-lore-border">
+              <div className={`w-2 h-2 rounded-full ${sourceInfo.color} ${dataSource === 'real' ? 'animate-pulse' : ''}`} />
+              <sourceInfo.icon size={12} className="text-lore-muted" />
+              <span className="text-[10px] text-lore-muted font-mono uppercase tracking-wider">{sourceInfo.label}</span>
+            </div>
+            {onClearCache && dataSource !== 'mock' && (
+              <button
+                onClick={onClearCache}
+                className="p-1.5 rounded text-lore-muted hover:text-lore-error hover:bg-lore-highlight transition-colors"
+                title="Clear cached data"
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
           </div>
 
           {/* CONTROLS */}
@@ -186,7 +230,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ mode, config, setConfig, onRu
               {isLoading ? (
                 <>
                   <RefreshCw className="animate-spin" size={14} />
-                  <span>...</span>
+                  <span>{fetchProgress ? `${fetchProgress.percent}%` : '...'}</span>
                 </>
               ) : (
                 <>
@@ -211,6 +255,32 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ mode, config, setConfig, onRu
           </div>
 
         </div>
+
+        {/* PROGRESS BAR & ERROR MESSAGE */}
+        {(isLoading && fetchProgress) && (
+          <div className="mt-3 pt-3 border-t border-lore-border/30">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-1.5 bg-lore-highlight rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-lore-primary transition-all duration-300 ease-out"
+                  style={{ width: `${fetchProgress.percent}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-lore-muted font-mono shrink-0">
+                {fetchProgress.currentAsset ? `Fetching ${fetchProgress.currentAsset}...` : fetchProgress.message}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {error && !isLoading && (
+          <div className="mt-3 pt-3 border-t border-lore-border/30">
+            <div className="flex items-center gap-2 text-lore-warning">
+              <AlertCircle size={12} />
+              <span className="text-[10px] font-mono">{error}</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
