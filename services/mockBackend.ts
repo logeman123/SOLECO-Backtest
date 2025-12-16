@@ -66,7 +66,7 @@ const REAL_SOLANA_ASSETS: MockAssetBase[] = [
   { symbol: 'MET', name: 'Meteora', basePrice: 0.1, baseMcap: 60e6, avgDailyVol: 2e6, isNative: true, category: 'DeFi' },
   { symbol: 'FARTCOIN', name: 'Fartcoin', basePrice: 0.04, baseMcap: 30e6, avgDailyVol: 800000, isNative: true, category: 'Meme' },
   { symbol: 'PNUT', name: 'Peanut the Squirrel', basePrice: 0.1, baseMcap: 80e6, avgDailyVol: 5e6, isNative: true, category: 'Meme' },
-  { symbol: 'W', name: 'Wormhole', basePrice: 0.35, baseMcap: 900e6, avgDailyVol: 35e6, isNative: false, category: 'Infra' },
+  { symbol: 'W', name: 'Wormhole', basePrice: 0.35, baseMcap: 900e6, avgDailyVol: 35e6, isNative: true, category: 'Infra' },
 ];
 
 // Helper: Generate date array

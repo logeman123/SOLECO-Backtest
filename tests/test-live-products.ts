@@ -30,7 +30,7 @@ const ASSETS = [
   { symbol: 'HNT', coingeckoId: 'helium', isNative: true, category: 'DePIN' },
   { symbol: 'RAY', coingeckoId: 'raydium', isNative: true, category: 'DeFi' },
   { symbol: 'ZBCN', coingeckoId: 'zebec-network', isNative: true, category: 'DeFi' },
-  { symbol: 'W', coingeckoId: 'wormhole', isNative: false, category: 'Infra' },
+  { symbol: 'W', coingeckoId: 'wormhole', isNative: true, category: 'Infra' },
   { symbol: 'JTO', coingeckoId: 'jito-governance-token', isNative: true, category: 'DeFi' },
   { symbol: 'FARTCOIN', coingeckoId: 'fartcoin', isNative: true, category: 'Meme' },
   { symbol: 'SAROS', coingeckoId: 'saros-finance', isNative: true, category: 'DeFi' },
