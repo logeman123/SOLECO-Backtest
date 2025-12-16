@@ -547,105 +547,149 @@ export const runBacktest = async (
 
     if (isRebalanceDay) {
       // --- REBALANCE LOGIC ---
-      const evaluatedUniverse: UniverseSnapshotItem[] = fullUniverse.map(asset => {
-        const assetData = assetDataMap[asset.symbol];
-        if (!assetData) {
+
+      // Check if using fixed weights (Live Products mode)
+      if (config.fixedWeights && d === 0) {
+        // Use fixed weights - only set on first day, then drift
+        const fixedWeightConfig: { symbol: string; weight: number }[] = [];
+        for (const [symbol, weight] of Object.entries(config.fixedWeights)) {
+          if (assetDataMap[symbol]) {
+            fixedWeightConfig.push({ symbol, weight });
+          }
+        }
+
+        currentPortfolio = fixedWeightConfig.map(w => {
+          const price = assetDataMap[w.symbol]?.prices[d] || 1;
+          return { symbol: w.symbol, shares: w.weight / price, weight: w.weight };
+        });
+
+        // Build simple universe snapshot for fixed weights
+        const evaluatedUniverse: UniverseSnapshotItem[] = fixedWeightConfig.map(w => {
+          const asset = fullUniverse.find(a => a.symbol === w.symbol);
+          const assetData = assetDataMap[w.symbol];
+          return {
+            assetId: `asset-${w.symbol}`,
+            symbol: w.symbol,
+            name: asset?.name || w.symbol,
+            price: assetData?.prices[d] || 0,
+            mcap: assetData?.mcaps[d] || 0,
+            avgDailyVol: assetData?.vols[d] || 0,
+            isNative: asset?.isNative || true,
+            status: 'INCLUDED' as InclusionStatus,
+            weight: w.weight,
+            auditFlags: []
+          };
+        });
+
+        rebalanceHistory.push({
+          date: backtestDates[d],
+          universeSnapshot: evaluatedUniverse,
+          totalMcap: evaluatedUniverse.reduce((sum, u) => sum + u.mcap, 0),
+          turnover: 0
+        });
+
+      } else if (!config.fixedWeights) {
+        // Dynamic mcap-weighted rebalancing (Strategy Workbench mode)
+        const evaluatedUniverse: UniverseSnapshotItem[] = fullUniverse.map(asset => {
+          const assetData = assetDataMap[asset.symbol];
+          if (!assetData) {
+            return {
+              assetId: `asset-${asset.symbol}`,
+              symbol: asset.symbol,
+              name: asset.name,
+              price: 0,
+              mcap: 0,
+              avgDailyVol: 0,
+              isNative: asset.isNative,
+              status: 'REJECTED_VOL' as InclusionStatus,
+              weight: 0,
+              auditFlags: []
+            };
+          }
+
+          const currentVol = assetData.vols[d];
+          const currentMcap = assetData.mcaps[d];
+          const currentPrice = assetData.prices[d];
+
+          let status: InclusionStatus = 'INCLUDED';
+
+          if (asset.category === 'Stablecoin') status = 'REJECTED_CATEGORY';
+          else if (asset.symbol === 'SOL') status = 'REJECTED_CATEGORY';
+          else if (!asset.isNative) status = 'REJECTED_NATIVE';
+          else if (currentVol < 200000) status = 'REJECTED_VOL';
+
+          const auditFlags = simulateAuditChecks(asset, currentVol);
+
           return {
             assetId: `asset-${asset.symbol}`,
             symbol: asset.symbol,
             name: asset.name,
-            price: 0,
-            mcap: 0,
-            avgDailyVol: 0,
+            price: currentPrice,
+            mcap: currentMcap,
+            avgDailyVol: currentVol,
             isNative: asset.isNative,
-            status: 'REJECTED_VOL' as InclusionStatus,
+            status,
             weight: 0,
-            auditFlags: []
+            auditFlags
           };
+        });
+
+        // LST Handling: Only allow ONE LST
+        const lstCandidates = evaluatedUniverse.filter(u =>
+          fullUniverse.find(a => a.symbol === u.symbol)?.category === 'LST' && u.status === 'INCLUDED'
+        );
+        if (lstCandidates.length > 1) {
+          lstCandidates.sort((a, b) => b.mcap - a.mcap);
+          for (let i = 1; i < lstCandidates.length; i++) {
+            lstCandidates[i].status = 'REJECTED_CATEGORY';
+          }
         }
 
-        const currentVol = assetData.vols[d];
-        const currentMcap = assetData.mcaps[d];
-        const currentPrice = assetData.prices[d];
+        const candidates = evaluatedUniverse.filter(u => u.status === 'INCLUDED');
+        candidates.sort((a, b) => b.mcap - a.mcap);
 
-        let status: InclusionStatus = 'INCLUDED';
+        const selected = candidates.slice(0, config.numAssets);
+        candidates.slice(config.numAssets).forEach(c => {
+          const originalItem = evaluatedUniverse.find(u => u.symbol === c.symbol);
+          if (originalItem) originalItem.status = 'REJECTED_RANK';
+        });
 
-        if (asset.category === 'Stablecoin') status = 'REJECTED_CATEGORY';
-        else if (asset.symbol === 'SOL') status = 'REJECTED_CATEGORY';
-        else if (!asset.isNative) status = 'REJECTED_NATIVE';
-        else if (currentVol < 200000) status = 'REJECTED_VOL';
+        const totalRawMcap = selected.reduce((sum, item) => sum + item.mcap, 0);
+        const initialWeights = selected.map(item => ({ symbol: item.symbol, rawWeight: item.mcap / totalRawMcap }));
 
-        const auditFlags = simulateAuditChecks(asset, currentVol);
+        let surplus = 0;
+        let weightConfig = initialWeights.map(w => {
+          if (w.rawWeight > config.maxWeight) {
+            surplus += w.rawWeight - config.maxWeight;
+            return { ...w, weight: config.maxWeight, capped: true };
+          }
+          return { ...w, weight: w.rawWeight, capped: false };
+        });
 
-        return {
-          assetId: `asset-${asset.symbol}`,
-          symbol: asset.symbol,
-          name: asset.name,
-          price: currentPrice,
-          mcap: currentMcap,
-          avgDailyVol: currentVol,
-          isNative: asset.isNative,
-          status,
-          weight: 0,
-          auditFlags
-        };
-      });
-
-      // LST Handling: Only allow ONE LST
-      const lstCandidates = evaluatedUniverse.filter(u =>
-        fullUniverse.find(a => a.symbol === u.symbol)?.category === 'LST' && u.status === 'INCLUDED'
-      );
-      if (lstCandidates.length > 1) {
-        lstCandidates.sort((a, b) => b.mcap - a.mcap);
-        for (let i = 1; i < lstCandidates.length; i++) {
-          lstCandidates[i].status = 'REJECTED_CATEGORY';
+        if (surplus > 0) {
+          const uncappedCount = weightConfig.filter(w => !w.capped).length;
+          if (uncappedCount > 0) {
+            weightConfig = weightConfig.map(w => !w.capped ? { ...w, weight: w.weight + (surplus/uncappedCount) } : w);
+          }
         }
+
+        weightConfig.forEach(w => {
+          const uItem = evaluatedUniverse.find(u => u.symbol === w.symbol);
+          if (uItem) uItem.weight = w.weight;
+        });
+
+        currentPortfolio = weightConfig.map(w => {
+          const price = assetDataMap[w.symbol]?.prices[d] || 1;
+          return { symbol: w.symbol, shares: w.weight / price, weight: w.weight };
+        });
+
+        rebalanceHistory.push({
+          date: backtestDates[d],
+          universeSnapshot: evaluatedUniverse,
+          totalMcap: totalRawMcap,
+          turnover: 0
+        });
       }
-
-      const candidates = evaluatedUniverse.filter(u => u.status === 'INCLUDED');
-      candidates.sort((a, b) => b.mcap - a.mcap);
-
-      const selected = candidates.slice(0, config.numAssets);
-      candidates.slice(config.numAssets).forEach(c => {
-        const originalItem = evaluatedUniverse.find(u => u.symbol === c.symbol);
-        if (originalItem) originalItem.status = 'REJECTED_RANK';
-      });
-
-      const totalRawMcap = selected.reduce((sum, item) => sum + item.mcap, 0);
-      const initialWeights = selected.map(item => ({ symbol: item.symbol, rawWeight: item.mcap / totalRawMcap }));
-
-      let surplus = 0;
-      let weightConfig = initialWeights.map(w => {
-        if (w.rawWeight > config.maxWeight) {
-          surplus += w.rawWeight - config.maxWeight;
-          return { ...w, weight: config.maxWeight, capped: true };
-        }
-        return { ...w, weight: w.rawWeight, capped: false };
-      });
-
-      if (surplus > 0) {
-        const uncappedCount = weightConfig.filter(w => !w.capped).length;
-        if (uncappedCount > 0) {
-          weightConfig = weightConfig.map(w => !w.capped ? { ...w, weight: w.weight + (surplus/uncappedCount) } : w);
-        }
-      }
-
-      weightConfig.forEach(w => {
-        const uItem = evaluatedUniverse.find(u => u.symbol === w.symbol);
-        if (uItem) uItem.weight = w.weight;
-      });
-
-      currentPortfolio = weightConfig.map(w => {
-        const price = assetDataMap[w.symbol]?.prices[d] || 1;
-        return { symbol: w.symbol, shares: w.weight / price, weight: w.weight };
-      });
-
-      rebalanceHistory.push({
-        date: backtestDates[d],
-        universeSnapshot: evaluatedUniverse,
-        totalMcap: totalRawMcap,
-        turnover: 0
-      });
 
     } else {
       // --- DRIFT LOGIC ---

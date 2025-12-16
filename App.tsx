@@ -22,6 +22,35 @@ const DEFAULT_CONFIG: BacktestConfig = {
   backtestWindow: '24M',
 };
 
+// Fixed portfolio weights for Live Products (official SOLECO allocation)
+export const LIVE_PORTFOLIO_WEIGHTS: Record<string, number> = {
+  BONK: 0.0600,
+  JITOSOL: 0.0600,
+  JUP: 0.0600,
+  PENGU: 0.0600,
+  PUMP: 0.0600,
+  RENDER: 0.0600,
+  TRUMP: 0.0600,
+  PYTH: 0.0527,
+  HNT: 0.0490,
+  WIF: 0.0461,
+  ZBCN: 0.0429,
+  RAY: 0.0408,
+  FARTCOIN: 0.0407,
+  W: 0.0348,
+  JTO: 0.0330,
+  KMNO: 0.0315,
+  GRASS: 0.0292,
+  MET: 0.0288,
+  MEW: 0.0241,
+  POPCAT: 0.0237,
+  DRIFT: 0.0230,
+  PNUT: 0.0226,
+  ORCA: 0.0204,
+  BOME: 0.0193,
+  SAROS: 0.0174,
+};
+
 // Fixed config for Live Products - Nov 28, 2025 (launch) to today with all assets
 const LIVE_PRODUCTS_CONFIG: BacktestConfig = {
   rebalanceInterval: 'weekly',
@@ -31,6 +60,7 @@ const LIVE_PRODUCTS_CONFIG: BacktestConfig = {
   backtestWindow: '6M',  // Fallback
   startDate: '2025-11-28',
   endDate: new Date().toISOString().split('T')[0],  // Today
+  fixedWeights: LIVE_PORTFOLIO_WEIGHTS,  // Use fixed weights
 };
 
 const App: React.FC = () => {

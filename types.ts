@@ -8,6 +8,7 @@ export interface BacktestConfig {
   backtestWindow: '6M' | '12M' | '24M' | '36M';
   startDate?: string | null;
   endDate?: string | null;
+  fixedWeights?: Record<string, number> | null;  // Optional fixed portfolio weights
 }
 
 export interface FinancialStats {
