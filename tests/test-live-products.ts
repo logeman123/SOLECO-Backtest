@@ -235,7 +235,7 @@ async function main() {
   console.log(`  Total weight: ${(Array.from(currentWeights.values()).reduce((a,b) => a+b, 0) * 100).toFixed(2)}%`);
 
   for (let d = 1; d < dates.length; d++) {
-    // Calculate daily return using current weights
+    // Calculate daily return using FIXED weights (daily rebalance to target weights)
     let dailyRet = 0;
     for (const [symbol, weight] of currentWeights.entries()) {
       const data = alignedData.get(symbol);
@@ -245,23 +245,7 @@ async function main() {
       }
     }
     indexNav.push(indexNav[d - 1] * (1 + dailyRet));
-
-    // Drift weights based on price changes (no rebalancing)
-    let totalVal = 0;
-    const driftedWeights = new Map<string, number>();
-    for (const [symbol, weight] of currentWeights.entries()) {
-      const data = alignedData.get(symbol);
-      if (data && data.prices[d] && data.prices[d - 1]) {
-        const growth = data.prices[d] / data.prices[d - 1];
-        const newWeight = weight * growth;
-        driftedWeights.set(symbol, newWeight);
-        totalVal += newWeight;
-      }
-    }
-    // Normalize weights
-    for (const [symbol, weight] of driftedWeights.entries()) {
-      currentWeights.set(symbol, weight / totalVal);
-    }
+    // No drift - weights stay fixed (daily rebalance)
   }
 
   // Calculate benchmark (SOL)

@@ -691,8 +691,8 @@ export const runBacktest = async (
         });
       }
 
-    } else {
-      // --- DRIFT LOGIC ---
+    } else if (!config.fixedWeights) {
+      // --- DRIFT LOGIC (only for dynamic weighting, not fixed weights) ---
       let totalVal = 0;
       const driftPortfolio = currentPortfolio.map(p => {
         const price = assetDataMap[p.symbol]?.prices[d] || 1;
@@ -707,6 +707,7 @@ export const runBacktest = async (
         if (cp) cp.weight = p.weight;
       });
     }
+    // For fixed weights, keep the original weights (no drift)
 
     currentPortfolio.forEach(p => {
       if (weightHistoryMap[p.symbol]) {
