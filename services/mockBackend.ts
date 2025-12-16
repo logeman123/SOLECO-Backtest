@@ -201,21 +201,35 @@ export const runMockBacktest = async (config: BacktestConfig, fast = false): Pro
       await new Promise(resolve => setTimeout(resolve, 300));
   }
 
-  const monthMap: Record<string, number> = { '6M': 6, '12M': 12, '24M': 24, '36M': 36 };
-  const reqMonths = monthMap[config.backtestWindow] || 12;
-  const reqDays = reqMonths * 30;
-  
-  const startIndex = Math.max(0, GLOBAL_DATES.length - reqDays);
-  const dates = GLOBAL_DATES.slice(startIndex);
+  // Trim to backtest window or custom date range
+  let dates: string[];
 
-  // 1. Slice Asset Data
+  if (config.startDate && config.endDate) {
+    // Use custom date range
+    const startIdx = GLOBAL_DATES.findIndex(d => d >= config.startDate!);
+    const endIdx = GLOBAL_DATES.findIndex(d => d > config.endDate!);
+    dates = GLOBAL_DATES.slice(
+      startIdx >= 0 ? startIdx : 0,
+      endIdx >= 0 ? endIdx : GLOBAL_DATES.length
+    );
+  } else {
+    // Use backtest window
+    const monthMap: Record<string, number> = { '6M': 6, '12M': 12, '24M': 24, '36M': 36 };
+    const reqMonths = monthMap[config.backtestWindow] || 12;
+    const reqDays = reqMonths * 30;
+    const startIndex = Math.max(0, GLOBAL_DATES.length - reqDays);
+    dates = GLOBAL_DATES.slice(startIndex);
+  }
+
+  // 1. Slice Asset Data - find start index based on first date in dates array
+  const dataStartIndex = GLOBAL_DATES.indexOf(dates[0]);
   const assetDataMap: Record<string, { prices: number[], mcaps: number[], vols: number[] }> = {};
   REAL_SOLANA_ASSETS.forEach(asset => {
       const fullData = GLOBAL_ASSET_DATA[asset.symbol];
       assetDataMap[asset.symbol] = {
-          prices: fullData.prices.slice(startIndex),
-          mcaps: fullData.mcaps.slice(startIndex),
-          vols: fullData.vols.slice(startIndex)
+          prices: fullData.prices.slice(dataStartIndex, dataStartIndex + dates.length),
+          mcaps: fullData.mcaps.slice(dataStartIndex, dataStartIndex + dates.length),
+          vols: fullData.vols.slice(dataStartIndex, dataStartIndex + dates.length)
       };
   });
 
@@ -470,12 +484,25 @@ export const runBacktest = async (
   }
   const dates = solData.dates;
 
-  // Trim to backtest window
-  const monthMap: Record<string, number> = { '6M': 6, '12M': 12, '24M': 24, '36M': 36 };
-  const reqMonths = monthMap[config.backtestWindow] || 12;
-  const reqDays = reqMonths * 30;
-  const startIndex = Math.max(0, dates.length - reqDays);
-  const backtestDates = dates.slice(startIndex);
+  // Trim to backtest window or custom date range
+  let backtestDates: string[];
+
+  if (config.startDate && config.endDate) {
+    // Use custom date range
+    const startIdx = dates.findIndex(d => d >= config.startDate!);
+    const endIdx = dates.findIndex(d => d > config.endDate!);
+    backtestDates = dates.slice(
+      startIdx >= 0 ? startIdx : 0,
+      endIdx >= 0 ? endIdx : dates.length
+    );
+  } else {
+    // Use backtest window
+    const monthMap: Record<string, number> = { '6M': 6, '12M': 12, '24M': 24, '36M': 36 };
+    const reqMonths = monthMap[config.backtestWindow] || 12;
+    const reqDays = reqMonths * 30;
+    const startIndex = Math.max(0, dates.length - reqDays);
+    backtestDates = dates.slice(startIndex);
+  }
 
   // Build asset data map with date-aligned data
   const assetDataMap: Record<string, { prices: number[], mcaps: number[], vols: number[] }> = {};

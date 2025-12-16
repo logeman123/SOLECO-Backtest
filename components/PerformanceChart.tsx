@@ -26,7 +26,7 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data }) => {
   }
 
   return (
-    <div className="h-[450px] w-full bg-lore-surface p-6 rounded-lg shadow-lg border border-lore-border">
+    <div className="w-full bg-lore-surface p-6 rounded-lg shadow-lg border border-lore-border">
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-xs font-mono font-bold text-lore-muted uppercase tracking-widest">NAV Performance (Base 100)</h3>
         <div className="flex gap-4">
@@ -38,8 +38,8 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data }) => {
              </div>
         </div>
       </div>
-      
-      <ResponsiveContainer width="100%" height="100%">
+
+      <ResponsiveContainer width="100%" height={380}>
         <LineChart
           data={data}
           margin={{

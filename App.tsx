@@ -22,12 +22,23 @@ const DEFAULT_CONFIG: BacktestConfig = {
   backtestWindow: '24M',
 };
 
+// Fixed config for Live Products - Nov 28, 2025 (launch) to today with all assets
+const LIVE_PRODUCTS_CONFIG: BacktestConfig = {
+  rebalanceInterval: 'weekly',
+  numAssets: 25,  // All assets
+  maxWeight: 0.25,
+  minWeight: 0.01,
+  backtestWindow: '6M',  // Fallback
+  startDate: '2025-11-28',
+  endDate: new Date().toISOString().split('T')[0],  // Today
+};
+
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
 
   const [dashboardConfig, setDashboardConfig] = useState<BacktestConfig>(DEFAULT_CONFIG);
   const [creatorConfig, setCreatorConfig] = useState<BacktestConfig>(DEFAULT_CONFIG);
-  const activeConfig = viewMode === 'dashboard' ? dashboardConfig : creatorConfig;
+  const activeConfig = viewMode === 'dashboard' ? LIVE_PRODUCTS_CONFIG : creatorConfig;
 
   const [result, setResult] = useState<BacktestResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -42,18 +53,27 @@ const App: React.FC = () => {
   const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(!API_CONFIG.hasApiKey());
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
 
-  const handleRunBacktest = async (cfg: BacktestConfig) => {
+  const handleRunBacktest = async (cfg: BacktestConfig, forceRealData = false) => {
     setIsLoading(true);
     setError(null);
     setFetchProgress(null);
 
     try {
-      // Check if we should use real data
-      const useRealData = API_CONFIG.USE_REAL_DATA && API_CONFIG.getApiKey();
+      // Check if we should use real data (Live Products always requires real data)
+      const useRealData = forceRealData || (API_CONFIG.USE_REAL_DATA && API_CONFIG.getApiKey());
 
-      if (useRealData) {
+      if (useRealData && API_CONFIG.getApiKey()) {
         // Fetch real data from CoinGecko
-        const days = BACKTEST_WINDOW_TO_DAYS[cfg.backtestWindow] || 365;
+        // For custom date ranges, calculate days from startDate to today (not endDate)
+        // CoinGecko returns last N days, so we need days from startDate to NOW
+        let days: number;
+        if (cfg.startDate) {
+          const start = new Date(cfg.startDate);
+          const now = new Date();
+          days = Math.ceil((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 14; // Days from startDate to now + buffer
+        } else {
+          days = BACKTEST_WINDOW_TO_DAYS[cfg.backtestWindow] || 365;
+        }
         const symbols = getAllSymbols();
 
         try {
@@ -78,6 +98,10 @@ const App: React.FC = () => {
           setDataSource('mock');
           setError('Using simulated data - real data unavailable');
         }
+      } else if (forceRealData && !API_CONFIG.getApiKey()) {
+        // Live Products needs API key
+        setError('API key required for Live Products - please set your CoinGecko API key');
+        setShowApiKeyModal(true);
       } else {
         // Use mock data
         const response = await runMockBacktest(cfg);
@@ -114,8 +138,8 @@ const App: React.FC = () => {
       }
 
       setShowApiKeyModal(false);
-      // Run backtest with real data
-      handleRunBacktest(DEFAULT_CONFIG);
+      // Run backtest with real data - use Live Products config on dashboard
+      handleRunBacktest(LIVE_PRODUCTS_CONFIG, true);
     } catch (err) {
       API_CONFIG.clearApiKey();
       setApiKeyError(err instanceof Error ? err.message : 'Failed to validate API key');
@@ -124,8 +148,9 @@ const App: React.FC = () => {
 
   const handleApiKeySkip = () => {
     setShowApiKeyModal(false);
-    // Run backtest with mock data
-    handleRunBacktest(DEFAULT_CONFIG);
+    // Without API key, go to Strategy Workbench with mock data
+    setViewMode('creator');
+    handleRunBacktest(creatorConfig);
   };
 
   const handleChangeApiKey = () => {
@@ -135,7 +160,7 @@ const App: React.FC = () => {
 
   const handleTabChange = (mode: ViewMode) => {
       setViewMode(mode);
-      if (mode === 'dashboard') handleRunBacktest(dashboardConfig);
+      if (mode === 'dashboard') handleRunBacktest(LIVE_PRODUCTS_CONFIG, true); // Live Products always uses real data
       else if (mode === 'creator') handleRunBacktest(creatorConfig);
   };
 
@@ -175,8 +200,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // Only auto-run if API key modal is not showing
+    // Start with Live Products fixed config on dashboard (requires real data)
     if (!showApiKeyModal) {
-      handleRunBacktest(DEFAULT_CONFIG);
+      handleRunBacktest(LIVE_PRODUCTS_CONFIG, true);
     }
   }, []);
 
@@ -268,15 +294,15 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Config Panel */}
+      {/* Config Panel - only shown on Strategy Workbench */}
       <div className={`sticky top-16 z-40 transition-all duration-300 ease-in-out ${
-          (viewMode === 'dashboard' || viewMode === 'creator') ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none h-0'
+          viewMode === 'creator' ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none h-0'
         }`}>
         <ConfigPanel
-          mode={viewMode as 'dashboard' | 'creator'}
-          config={activeConfig}
-          setConfig={viewMode === 'dashboard' ? setDashboardConfig : setCreatorConfig}
-          onRun={() => handleRunBacktest(activeConfig)}
+          mode="creator"
+          config={creatorConfig}
+          setConfig={setCreatorConfig}
+          onRun={() => handleRunBacktest(creatorConfig)}
           isLoading={isLoading}
           onToggleOptimizer={() => setIsOptimizerOpen(!isOptimizerOpen)}
           isOptimizerOpen={isOptimizerOpen}
@@ -356,11 +382,14 @@ const App: React.FC = () => {
         {/* WORKBENCH & DASHBOARD CONTENT */}
         {viewMode !== 'portfolio' && (
             <>
-                <OptimizerPanel 
-                    baseConfig={activeConfig} 
-                    onApplyConfig={handleApplyOptimizedConfig} 
-                    isOpen={isOptimizerOpen}
-                />
+                {/* Optimizer only available on Workbench */}
+                {viewMode === 'creator' && (
+                  <OptimizerPanel
+                      baseConfig={activeConfig}
+                      onApplyConfig={handleApplyOptimizedConfig}
+                      isOpen={isOptimizerOpen}
+                  />
+                )}
 
                 {result && (
                   <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -386,6 +415,12 @@ const App: React.FC = () => {
                           <span className="text-xs font-mono font-bold uppercase tracking-widest">Active Methodology</span>
                        </div>
                        <div className="relative z-10 space-y-4">
+                           {viewMode === 'dashboard' && (
+                             <div className="flex justify-between items-end border-b border-lore-border/50 pb-2">
+                                 <span className="text-xs text-lore-muted">Period</span>
+                                 <span className="text-sm font-mono font-bold text-white">Nov 28, 2025 - Today</span>
+                             </div>
+                           )}
                            <div className="flex justify-between items-end border-b border-lore-border/50 pb-2">
                                <span className="text-xs text-lore-muted">Rebalancing</span>
                                <span className="text-sm font-mono font-bold text-white capitalize">{activeConfig.rebalanceInterval}</span>
