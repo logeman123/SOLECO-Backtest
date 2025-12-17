@@ -1,5 +1,7 @@
 
 import { BacktestConfig, BacktestResponse, FinancialStats, Constituent, UniverseStats, RebalanceEvent, UniverseSnapshotItem, DataDiscrepancy, InclusionStatus, SimulationResult } from '../types';
+import { SCREENING_CONFIG } from './screeningService';
+import { SOLANA_ASSETS, AssetDefinition } from './assetMapping';
 
 // Base Mock Assets with Methodology Properties
 interface MockAssetBase {
@@ -7,66 +9,71 @@ interface MockAssetBase {
   name: string;
   basePrice: number;
   baseMcap: number;
-  avgDailyVol: number; 
-  isNative: boolean;   
+  avgDailyVol: number;
+  isNative: boolean;
   category: 'L1' | 'DeFi' | 'Meme' | 'Infra' | 'Stablecoin' | 'LST' | 'AI' | 'DePIN' | 'NFT';
+  // Section 4.2 Compliance Fields
+  solanaLaunchOrNexus: boolean;
+  primaryNetworkSolana: boolean;
+  hasUnresolvedAuditFindings: boolean;
 }
 
 // 25 Specific Assets based on User Ground Truth
+// All assets include Section 4.2 compliance fields (pre-vetted)
 const REAL_SOLANA_ASSETS: MockAssetBase[] = [
   // 1. PUMP (Massive)
-  { symbol: 'PUMP', name: 'Pump.fun', basePrice: 1.0, baseMcap: 2.96e9, avgDailyVol: 450e6, isNative: true, category: 'Meme' },
-  
+  { symbol: 'PUMP', name: 'Pump.fun', basePrice: 1.0, baseMcap: 2.96e9, avgDailyVol: 450e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+
   // 2. JUP
-  { symbol: 'JUP', name: 'Jupiter', basePrice: 1.1, baseMcap: 1.78e9, avgDailyVol: 100e6, isNative: true, category: 'DeFi' },
-  
+  { symbol: 'JUP', name: 'Jupiter', basePrice: 1.1, baseMcap: 1.78e9, avgDailyVol: 100e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+
   // 3. PYTH
-  { symbol: 'PYTH', name: 'Pyth Network', basePrice: 0.35, baseMcap: 782e6, avgDailyVol: 40e6, isNative: true, category: 'Infra' },
-  
+  { symbol: 'PYTH', name: 'Pyth Network', basePrice: 0.35, baseMcap: 782e6, avgDailyVol: 40e6, isNative: true, category: 'Infra', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+
   // 4. GRASS (AI)
-  { symbol: 'GRASS', name: 'Grass', basePrice: 1.5, baseMcap: 332e6, avgDailyVol: 45e6, isNative: true, category: 'AI' },
+  { symbol: 'GRASS', name: 'Grass', basePrice: 1.5, baseMcap: 332e6, avgDailyVol: 45e6, isNative: true, category: 'AI', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
 
   // 5. ZBCN
-  { symbol: 'ZBCN', name: 'Zebec Network', basePrice: 0.003, baseMcap: 321e6, avgDailyVol: 15e6, isNative: true, category: 'DeFi' },
+  { symbol: 'ZBCN', name: 'Zebec Network', basePrice: 0.003, baseMcap: 321e6, avgDailyVol: 15e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
 
   // 6. MEW
-  { symbol: 'MEW', name: 'cat in a dogs world', basePrice: 0.004, baseMcap: 300e6, avgDailyVol: 20e6, isNative: true, category: 'Meme' },
+  { symbol: 'MEW', name: 'cat in a dogs world', basePrice: 0.004, baseMcap: 300e6, avgDailyVol: 20e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
 
   // 7. TRUMP
-  { symbol: 'TRUMP', name: 'Official Trump', basePrice: 4.0, baseMcap: 150e6, avgDailyVol: 10e6, isNative: true, category: 'Meme' },
+  { symbol: 'TRUMP', name: 'Official Trump', basePrice: 4.0, baseMcap: 150e6, avgDailyVol: 10e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
 
   // 8. ORCA
-  { symbol: 'ORCA', name: 'Orca', basePrice: 2.1, baseMcap: 110e6, avgDailyVol: 5e6, isNative: true, category: 'DeFi' },
+  { symbol: 'ORCA', name: 'Orca', basePrice: 2.1, baseMcap: 110e6, avgDailyVol: 5e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
 
   // 10. POPCAT
-  { symbol: 'POPCAT', name: 'Popcat', basePrice: 0.4, baseMcap: 106e6, avgDailyVol: 10e6, isNative: true, category: 'Meme' },
+  { symbol: 'POPCAT', name: 'Popcat', basePrice: 0.4, baseMcap: 106e6, avgDailyVol: 10e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
 
   // 11. BOME (Corrected to ~50M)
-  { symbol: 'BOME', name: 'Book of Meme', basePrice: 0.008, baseMcap: 50e6, avgDailyVol: 15e6, isNative: true, category: 'Meme' },
+  { symbol: 'BOME', name: 'Book of Meme', basePrice: 0.008, baseMcap: 50e6, avgDailyVol: 15e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
 
   // 12. PENGU
-  { symbol: 'PENGU', name: 'Pudgy Penguins', basePrice: 0.05, baseMcap: 40e6, avgDailyVol: 2e6, isNative: true, category: 'NFT' },
+  { symbol: 'PENGU', name: 'Pudgy Penguins', basePrice: 0.05, baseMcap: 40e6, avgDailyVol: 2e6, isNative: true, category: 'NFT', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
 
   // 13. SAROS
-  { symbol: 'SAROS', name: 'Saros', basePrice: 0.005, baseMcap: 25e6, avgDailyVol: 1e6, isNative: true, category: 'DeFi' },
+  { symbol: 'SAROS', name: 'Saros', basePrice: 0.005, baseMcap: 25e6, avgDailyVol: 1e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
 
   // --- LSTs & Benchmark Exclusions ---
-  { symbol: 'SOL', name: 'Solana', basePrice: 145, baseMcap: 65e9, avgDailyVol: 2e9, isNative: true, category: 'L1' },
-  { symbol: 'JITOSOL', name: 'Jito Staked SOL', basePrice: 160, baseMcap: 2.5e9, avgDailyVol: 60e6, isNative: true, category: 'LST' },
-  
+  { symbol: 'SOL', name: 'Solana', basePrice: 145, baseMcap: 65e9, avgDailyVol: 2e9, isNative: true, category: 'L1', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+  { symbol: 'JITOSOL', name: 'Jito Staked SOL', basePrice: 160, baseMcap: 2.5e9, avgDailyVol: 60e6, isNative: true, category: 'LST', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+
   // --- Other High Profile for Context ---
-  { symbol: 'RENDER', name: 'Render', basePrice: 7.5, baseMcap: 3.5e9, avgDailyVol: 100e6, isNative: true, category: 'DePIN' },
-  { symbol: 'WIF', name: 'dogwifhat', basePrice: 2.5, baseMcap: 2.5e9, avgDailyVol: 400e6, isNative: true, category: 'Meme' },
-  { symbol: 'BONK', name: 'Bonk', basePrice: 0.000025, baseMcap: 1.5e9, avgDailyVol: 150e6, isNative: true, category: 'Meme' },
-  { symbol: 'HNT', name: 'Helium', basePrice: 4.2, baseMcap: 800e6, avgDailyVol: 15e6, isNative: true, category: 'DePIN' },
-  { symbol: 'RAY', name: 'Raydium', basePrice: 1.8, baseMcap: 450e6, avgDailyVol: 25e6, isNative: true, category: 'DeFi' },
-  { symbol: 'JTO', name: 'Jito', basePrice: 2.8, baseMcap: 380e6, avgDailyVol: 30e6, isNative: true, category: 'DeFi' },
-  { symbol: 'DRIFT', name: 'Drift', basePrice: 0.7, baseMcap: 150e6, avgDailyVol: 10e6, isNative: true, category: 'DeFi' },
-  { symbol: 'KMNO', name: 'Kamino', basePrice: 0.08, baseMcap: 80e6, avgDailyVol: 5e6, isNative: true, category: 'DeFi' },
-  { symbol: 'MET', name: 'Meteora', basePrice: 0.1, baseMcap: 60e6, avgDailyVol: 2e6, isNative: true, category: 'DeFi' },
-  { symbol: 'FARTCOIN', name: 'Fartcoin', basePrice: 0.04, baseMcap: 30e6, avgDailyVol: 800000, isNative: true, category: 'Meme' },
-  { symbol: 'PNUT', name: 'Peanut the Squirrel', basePrice: 0.1, baseMcap: 80e6, avgDailyVol: 5e6, isNative: true, category: 'Meme' },
-  { symbol: 'W', name: 'Wormhole', basePrice: 0.35, baseMcap: 900e6, avgDailyVol: 35e6, isNative: true, category: 'Infra' },
+  { symbol: 'RENDER', name: 'Render', basePrice: 7.5, baseMcap: 3.5e9, avgDailyVol: 100e6, isNative: true, category: 'DePIN', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+  { symbol: 'WIF', name: 'dogwifhat', basePrice: 2.5, baseMcap: 2.5e9, avgDailyVol: 400e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+  { symbol: 'BONK', name: 'Bonk', basePrice: 0.000025, baseMcap: 1.5e9, avgDailyVol: 150e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+  { symbol: 'HNT', name: 'Helium', basePrice: 4.2, baseMcap: 800e6, avgDailyVol: 15e6, isNative: true, category: 'DePIN', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+  { symbol: 'RAY', name: 'Raydium', basePrice: 1.8, baseMcap: 450e6, avgDailyVol: 25e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+  { symbol: 'JTO', name: 'Jito', basePrice: 2.8, baseMcap: 380e6, avgDailyVol: 30e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+  { symbol: 'DRIFT', name: 'Drift', basePrice: 0.7, baseMcap: 150e6, avgDailyVol: 10e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+  { symbol: 'KMNO', name: 'Kamino', basePrice: 0.08, baseMcap: 80e6, avgDailyVol: 5e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+  { symbol: 'MET', name: 'Meteora', basePrice: 0.1, baseMcap: 60e6, avgDailyVol: 2e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+  { symbol: 'FARTCOIN', name: 'Fartcoin', basePrice: 0.04, baseMcap: 30e6, avgDailyVol: 800000, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+  { symbol: 'PNUT', name: 'Peanut the Squirrel', basePrice: 0.1, baseMcap: 80e6, avgDailyVol: 5e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
+  { symbol: 'W', name: 'Wormhole', basePrice: 0.35, baseMcap: 900e6, avgDailyVol: 35e6, isNative: true, category: 'Infra', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
 ];
 
 // Helper: Generate date array
@@ -248,20 +255,30 @@ export const runMockBacktest = async (config: BacktestConfig, fast = false): Pro
 
     if (isRebalanceDay) {
         // --- REBALANCE LOGIC ---
+        // Apply Section 4.2 Constituent-Selection Criteria
         const evaluatedUniverse: UniverseSnapshotItem[] = fullUniverse.map(asset => {
             const currentVol = assetDataMap[asset.symbol].vols[d];
             const currentMcap = assetDataMap[asset.symbol].mcaps[d];
             const currentPrice = assetDataMap[asset.symbol].prices[d];
-            
+
             let status: InclusionStatus = 'INCLUDED';
-            
-            if (asset.category === 'Stablecoin') status = 'REJECTED_CATEGORY'; 
-            else if (asset.symbol === 'SOL') status = 'REJECTED_CATEGORY'; 
+
+            // Category exclusions (Stablecoins, SOL benchmark)
+            if (asset.category === 'Stablecoin') status = 'REJECTED_CATEGORY';
+            else if (asset.symbol === 'SOL') status = 'REJECTED_CATEGORY';
+            // Criteria 1: Solana Launch or Nexus
+            else if (!asset.solanaLaunchOrNexus) status = 'REJECTED_LAUNCH';
+            // Criteria 2: Primary Network = Solana
+            else if (!asset.primaryNetworkSolana) status = 'REJECTED_PRIMARY_NETWORK';
+            // Native check
             else if (!asset.isNative) status = 'REJECTED_NATIVE';
-            else if (currentVol < 200000) status = 'REJECTED_VOL';
+            // Criteria 3: Volume threshold ($200k 30-day avg)
+            else if (currentVol < SCREENING_CONFIG.MIN_AVG_DAILY_VOLUME_USD) status = 'REJECTED_VOL';
+            // Criteria 4: Governance & Compliance
+            else if (asset.hasUnresolvedAuditFindings) status = 'REJECTED_AUDIT';
 
             const auditFlags = simulateAuditChecks(asset, currentVol);
-            
+
             return {
                 assetId: `asset-${asset.symbol}`,
                 symbol: asset.symbol,
@@ -463,12 +480,28 @@ interface NormalizedPriceData {
   volumes: number[];
 }
 
+// Interface for custom asset info passed to backtest
+export interface CustomAssetInfo {
+  symbol: string;
+  name: string;
+  coingeckoId: string;
+  // Section 4.2 compliance (attested by user)
+  solanaLaunchOrNexus: boolean;
+  primaryNetworkSolana: boolean;
+  hasUnresolvedAuditFindings: boolean;
+  category?: 'DeFi' | 'Meme' | 'Infra' | 'LST' | 'AI' | 'DePIN' | 'NFT' | 'Other';
+}
+
 // Run backtest with real price data
 export const runBacktest = async (
   config: BacktestConfig,
   priceData: Map<string, NormalizedPriceData>,
-  fast = false
+  options?: {
+    fast?: boolean;
+    customAssets?: CustomAssetInfo[];
+  }
 ): Promise<BacktestResponse> => {
+  const { fast = false, customAssets = [] } = options || {};
   if (!fast) {
     await new Promise(resolve => setTimeout(resolve, 100));
   }
@@ -531,8 +564,26 @@ export const runBacktest = async (
     assetDataMap[symbol] = { prices, mcaps, vols };
   }
 
-  // Build universe from asset mapping
-  const fullUniverse = REAL_SOLANA_ASSETS.filter(a => availableSymbols.includes(a.symbol));
+  // Build universe from asset mapping + custom assets
+  const defaultUniverse = REAL_SOLANA_ASSETS.filter(a => availableSymbols.includes(a.symbol));
+
+  // Convert custom assets to MockAssetBase format
+  const customUniverse: MockAssetBase[] = customAssets
+    .filter(a => availableSymbols.includes(a.symbol))
+    .map(a => ({
+      symbol: a.symbol,
+      name: a.name,
+      basePrice: 1, // Not used for real data
+      baseMcap: 0,
+      avgDailyVol: 0,
+      isNative: true, // Custom assets attested as Solana native
+      category: (a.category || 'Other') as MockAssetBase['category'],
+      solanaLaunchOrNexus: a.solanaLaunchOrNexus,
+      primaryNetworkSolana: a.primaryNetworkSolana,
+      hasUnresolvedAuditFindings: a.hasUnresolvedAuditFindings,
+    }));
+
+  const fullUniverse = [...defaultUniverse, ...customUniverse];
 
   const rebalanceHistory: RebalanceEvent[] = [];
   const rebalanceIntervalDays = config.rebalanceInterval === 'weekly' ? 7 : config.rebalanceInterval === 'biweekly' ? 14 : 30;
@@ -613,10 +664,20 @@ export const runBacktest = async (
 
           let status: InclusionStatus = 'INCLUDED';
 
+          // Apply Section 4.2 Constituent-Selection Criteria
+          // Category exclusions (Stablecoins, SOL benchmark)
           if (asset.category === 'Stablecoin') status = 'REJECTED_CATEGORY';
           else if (asset.symbol === 'SOL') status = 'REJECTED_CATEGORY';
+          // Criteria 1: Solana Launch or Nexus
+          else if (!asset.solanaLaunchOrNexus) status = 'REJECTED_LAUNCH';
+          // Criteria 2: Primary Network = Solana
+          else if (!asset.primaryNetworkSolana) status = 'REJECTED_PRIMARY_NETWORK';
+          // Native check
           else if (!asset.isNative) status = 'REJECTED_NATIVE';
-          else if (currentVol < 200000) status = 'REJECTED_VOL';
+          // Criteria 3: Volume threshold ($200k 30-day avg)
+          else if (currentVol < SCREENING_CONFIG.MIN_AVG_DAILY_VOLUME_USD) status = 'REJECTED_VOL';
+          // Criteria 4: Governance & Compliance
+          else if (asset.hasUnresolvedAuditFindings) status = 'REJECTED_AUDIT';
 
           const auditFlags = simulateAuditChecks(asset, currentVol);
 

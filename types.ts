@@ -44,7 +44,16 @@ export interface DataDiscrepancy {
   contested: boolean; // Was inclusion debated?
 }
 
-export type InclusionStatus = 'INCLUDED' | 'REJECTED_VOL' | 'REJECTED_NATIVE' | 'REJECTED_RANK' | 'REJECTED_AUDIT' | 'REJECTED_CATEGORY';
+// Inclusion status with rejection reasons mapped to Section 4.2 criteria
+export type InclusionStatus =
+  | 'INCLUDED'
+  | 'REJECTED_VOL'              // Criteria 3: Failed $200k 30-day avg daily volume
+  | 'REJECTED_NATIVE'           // Criteria 1: Not native to Solana
+  | 'REJECTED_RANK'             // Criteria 3: Outside top decile by float-adjusted mcap
+  | 'REJECTED_AUDIT'            // Criteria 4: Has unresolved critical audit findings
+  | 'REJECTED_CATEGORY'         // Excluded category (Stablecoin, SOL benchmark, extra LSTs)
+  | 'REJECTED_LAUNCH'           // Criteria 1: Did not launch on Solana or have Solana nexus
+  | 'REJECTED_PRIMARY_NETWORK'; // Criteria 2: Solana not principal venue in 2+ of last 4 months
 
 export interface UniverseSnapshotItem {
   assetId: string;

@@ -150,6 +150,12 @@ async function fetchFromApi(
   }
 }
 
+// Custom asset ID mapping for user-added assets
+interface CustomAssetId {
+  symbol: string;
+  coingeckoId: string;
+}
+
 // Main function: Fetch all asset data with caching
 export async function fetchAllAssetData(
   symbols: string[],
@@ -157,23 +163,36 @@ export async function fetchAllAssetData(
   options?: {
     forceRefresh?: boolean;
     onProgress?: (progress: FetchProgress) => void;
+    customAssetIds?: CustomAssetId[]; // For user-added assets not in SOLANA_ASSETS
   }
 ): Promise<{ data: Map<string, NormalizedPriceData>; source: DataSource }> {
-  const { forceRefresh = false, onProgress } = options || {};
+  const { forceRefresh = false, onProgress, customAssetIds = [] } = options || {};
   const result = new Map<string, NormalizedPriceData>();
   let dataSource: DataSource = 'real';
   let usedCache = false;
   let usedMock = false;
 
-  // Filter to valid symbols
-  const validAssets = symbols
-    .map(s => getAssetBySymbol(s))
-    .filter((a): a is NonNullable<typeof a> => a !== undefined);
+  // Build a list of assets to fetch: default assets + custom assets
+  const assetsToFetch: { symbol: string; coingeckoId: string; isCustom: boolean }[] = [];
 
-  const total = validAssets.length;
+  for (const symbol of symbols) {
+    // Check if it's a default asset
+    const defaultAsset = getAssetBySymbol(symbol);
+    if (defaultAsset) {
+      assetsToFetch.push({ symbol, coingeckoId: defaultAsset.coingeckoId, isCustom: false });
+    } else {
+      // Check if it's a custom asset
+      const customAsset = customAssetIds.find((a) => a.symbol === symbol);
+      if (customAsset) {
+        assetsToFetch.push({ symbol, coingeckoId: customAsset.coingeckoId, isCustom: true });
+      }
+    }
+  }
+
+  const total = assetsToFetch.length;
   let completed = 0;
 
-  for (const asset of validAssets) {
+  for (const asset of assetsToFetch) {
     const { symbol, coingeckoId } = asset;
 
     onProgress?.({
@@ -212,12 +231,15 @@ export async function fetchAllAssetData(
         console.log(`Using stale cache for ${symbol}`);
         result.set(symbol, staleCache.data);
         usedCache = true;
-      } else {
-        // Fall back to mock data
+      } else if (!asset.isCustom) {
+        // Fall back to mock data (only for default assets with fallback values)
         console.log(`Using mock data for ${symbol}`);
         const mockData = generateMockDataForAsset(symbol, days);
         result.set(symbol, mockData);
         usedMock = true;
+      } else {
+        // Custom asset with no data - skip it
+        console.warn(`No data available for custom asset ${symbol} - skipping`);
       }
     }
 
@@ -232,7 +254,7 @@ export async function fetchAllAssetData(
   // Determine data source
   if (usedMock) {
     dataSource = 'mock';
-  } else if (usedCache && result.size === validAssets.length) {
+  } else if (usedCache && result.size === assetsToFetch.length) {
     dataSource = 'cached';
   }
 
@@ -281,4 +303,67 @@ export async function clearCache(): Promise<void> {
 // Get all symbols
 export function getAllSymbols(): string[] {
   return SOLANA_ASSETS.map(a => a.symbol);
+}
+
+/**
+ * CoinGecko coin info response (simplified)
+ */
+export interface CoinGeckoInfo {
+  id: string;
+  symbol: string;
+  name: string;
+  contract_address?: string;
+  platforms?: Record<string, string>;
+  categories?: string[];
+}
+
+/**
+ * Lookup coin info by CoinGecko ID
+ * Returns basic info about the coin (symbol, name, contract address)
+ */
+export async function lookupCoinById(coingeckoId: string): Promise<CoinGeckoInfo | null> {
+  const apiKey = API_CONFIG.getApiKey();
+  if (!apiKey) {
+    throw new Error('API key required for coin lookup');
+  }
+
+  try {
+    const url = `${API_CONFIG.COINGECKO_BASE_URL}/coins/${coingeckoId}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false`;
+
+    const response = await fetch(url, {
+      headers: {
+        'x-cg-pro-api-key': apiKey,
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null; // Coin not found
+      }
+      throw new CoinGeckoApiError(response.status, await response.text(), coingeckoId);
+    }
+
+    const data = await response.json();
+
+    // Extract Solana contract address if available
+    let solanaAddress: string | undefined;
+    if (data.platforms && data.platforms.solana) {
+      solanaAddress = data.platforms.solana;
+    } else if (data.detail_platforms?.solana?.contract_address) {
+      solanaAddress = data.detail_platforms.solana.contract_address;
+    }
+
+    return {
+      id: data.id,
+      symbol: data.symbol?.toUpperCase() || coingeckoId,
+      name: data.name || coingeckoId,
+      contract_address: solanaAddress,
+      platforms: data.platforms,
+      categories: data.categories,
+    };
+  } catch (error) {
+    if (error instanceof CoinGeckoApiError) throw error;
+    console.error('Error looking up coin:', error);
+    throw error;
+  }
 }

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { BacktestConfig, BacktestResponse, ChartDataPoint, DeployedStrategy } from './types';
-import { runMockBacktest, runBacktest } from './services/mockBackend';
+import { CustomAsset, CustomAssetAttestation } from './types/customAsset';
+import { runMockBacktest, runBacktest, CustomAssetInfo } from './services/mockBackend';
 import { fetchAllAssetData, clearCache, getAllSymbols } from './services/coingeckoService';
 import { BACKTEST_WINDOW_TO_DAYS, API_CONFIG } from './config/apiConfig';
 import { DataSource, FetchProgress } from './types/coingecko';
+import { SOLANA_ASSETS } from './services/assetMapping';
 import ConfigPanel from './components/ConfigPanel';
 import StatsCard from './components/StatsCard';
 import PerformanceChart from './components/PerformanceChart';
@@ -79,6 +81,45 @@ const App: React.FC = () => {
 
   const [deployedStrategies, setDeployedStrategies] = useState<DeployedStrategy[]>([]);
 
+  // Asset Universe state (Strategy Workbench only)
+  const [customAssets, setCustomAssets] = useState<CustomAsset[]>([]);
+  const [removedAssets, setRemovedAssets] = useState<string[]>([]);
+
+  // Asset Universe handlers
+  const handleAddAsset = (asset: CustomAsset) => {
+    setCustomAssets((prev) => [...prev, asset]);
+  };
+
+  const handleRemoveAsset = (symbol: string) => {
+    // Check if it's a custom asset or default asset
+    const isCustom = customAssets.some((a) => a.symbol === symbol);
+    if (isCustom) {
+      setCustomAssets((prev) => prev.filter((a) => a.symbol !== symbol));
+    } else {
+      // Add to removed defaults
+      setRemovedAssets((prev) => [...prev, symbol]);
+    }
+  };
+
+  const handleRestoreAsset = (symbol: string) => {
+    setRemovedAssets((prev) => prev.filter((s) => s !== symbol));
+  };
+
+  const handleUpdateAttestation = (coingeckoId: string, attestation: CustomAssetAttestation) => {
+    setCustomAssets((prev) =>
+      prev.map((a) => (a.coingeckoId === coingeckoId ? { ...a, attestation } : a))
+    );
+  };
+
+  // Get active symbols for backtest (default - removed + custom)
+  const getActiveSymbols = (): string[] => {
+    const defaultSymbols = SOLANA_ASSETS
+      .filter((a) => !removedAssets.includes(a.symbol))
+      .map((a) => a.symbol);
+    const customSymbols = customAssets.filter((a) => a.isIncluded).map((a) => a.symbol);
+    return [...defaultSymbols, ...customSymbols];
+  };
+
   // API Key Modal state
   const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(!API_CONFIG.hasApiKey());
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
@@ -104,17 +145,38 @@ const App: React.FC = () => {
         } else {
           days = BACKTEST_WINDOW_TO_DAYS[cfg.backtestWindow] || 365;
         }
-        const symbols = getAllSymbols();
+
+        // Get active symbols: default (minus removed) + custom assets
+        // For Strategy Workbench, use the customized universe
+        const activeSymbols = getActiveSymbols();
+        // Get coingecko IDs for custom assets
+        const customAssetIds = customAssets
+          .filter((a) => a.isIncluded)
+          .map((a) => ({ symbol: a.symbol, coingeckoId: a.coingeckoId }));
 
         try {
-          const { data: priceData, source } = await fetchAllAssetData(symbols, days, {
+          const { data: priceData, source } = await fetchAllAssetData(activeSymbols, days, {
             onProgress: setFetchProgress,
+            customAssetIds, // Pass custom asset CoinGecko IDs
           });
 
           setDataSource(source);
 
-          // Run backtest with real data
-          const response = await runBacktest(cfg, priceData);
+          // Convert custom assets to CustomAssetInfo format for runBacktest
+          const customAssetInfos: CustomAssetInfo[] = customAssets
+            .filter((a) => a.isIncluded)
+            .map((a) => ({
+              symbol: a.symbol,
+              name: a.name,
+              coingeckoId: a.coingeckoId,
+              solanaLaunchOrNexus: a.attestation.solanaLaunchOrNexus,
+              primaryNetworkSolana: a.attestation.primaryNetworkSolana,
+              hasUnresolvedAuditFindings: !a.attestation.noUnresolvedAuditFindings, // Note: negation
+              category: a.category,
+            }));
+
+          // Run backtest with real data and custom assets
+          const response = await runBacktest(cfg, priceData, { customAssets: customAssetInfos });
           setResult(response);
 
           if (source === 'mock') {
@@ -341,6 +403,12 @@ const App: React.FC = () => {
           fetchProgress={fetchProgress}
           error={error}
           onClearCache={handleClearCache}
+          customAssets={customAssets}
+          removedAssets={removedAssets}
+          onAddAsset={handleAddAsset}
+          onRemoveAsset={handleRemoveAsset}
+          onRestoreAsset={handleRestoreAsset}
+          onUpdateAttestation={handleUpdateAttestation}
         />
       </div>
 

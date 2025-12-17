@@ -2,7 +2,9 @@
 import React, { useEffect, useState } from 'react';
 import { BacktestConfig } from '../types';
 import { DataSource, FetchProgress } from '../types/coingecko';
+import { CustomAsset, CustomAssetAttestation } from '../types/customAsset';
 import { Play, RefreshCw, AlertCircle, ChevronDown, Save, FlaskConical, Sliders, Activity, Database, Wifi, WifiOff, Trash2 } from 'lucide-react';
+import AssetUniverseManager from './AssetUniverseManager';
 
 interface ConfigPanelProps {
   mode: 'dashboard' | 'creator';
@@ -17,6 +19,13 @@ interface ConfigPanelProps {
   fetchProgress?: FetchProgress | null;
   error?: string | null;
   onClearCache?: () => void;
+  // Asset Universe Management (Strategy Workbench only)
+  customAssets?: CustomAsset[];
+  removedAssets?: string[];
+  onAddAsset?: (asset: CustomAsset) => void;
+  onRemoveAsset?: (symbol: string) => void;
+  onRestoreAsset?: (symbol: string) => void;
+  onUpdateAttestation?: (coingeckoId: string, attestation: CustomAssetAttestation) => void;
 }
 
 const ConfigPanel: React.FC<ConfigPanelProps> = ({
@@ -32,6 +41,12 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
   fetchProgress,
   error,
   onClearCache,
+  customAssets = [],
+  removedAssets = [],
+  onAddAsset,
+  onRemoveAsset,
+  onRestoreAsset,
+  onUpdateAttestation,
 }) => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const isDashboard = mode === 'dashboard';
@@ -255,6 +270,19 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
           </div>
 
         </div>
+
+        {/* ASSET UNIVERSE MANAGER - Strategy Workbench only */}
+        {!isDashboard && onAddAsset && onRemoveAsset && onRestoreAsset && onUpdateAttestation && (
+          <AssetUniverseManager
+            customAssets={customAssets}
+            removedAssets={removedAssets}
+            onAddAsset={onAddAsset}
+            onRemoveAsset={onRemoveAsset}
+            onRestoreAsset={onRestoreAsset}
+            onUpdateAttestation={onUpdateAttestation}
+            disabled={isLoading}
+          />
+        )}
 
         {/* PROGRESS BAR & ERROR MESSAGE */}
         {(isLoading && fetchProgress) && (
