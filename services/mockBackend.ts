@@ -11,7 +11,7 @@ interface MockAssetBase {
   baseMcap: number;
   avgDailyVol: number;
   isNative: boolean;
-  category: 'L1' | 'DeFi' | 'Meme' | 'Infra' | 'Stablecoin' | 'LST' | 'AI' | 'DePIN' | 'NFT';
+  category: 'L1' | 'DeFi' | 'Meme' | 'Infra' | 'Stablecoin' | 'LST' | 'AI' | 'DePIN' | 'NFT' | 'Other';
   // Section 4.2 Compliance Fields
   solanaLaunchOrNexus: boolean;
   primaryNetworkSolana: boolean;
