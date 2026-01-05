@@ -71,44 +71,6 @@ function normalizeData(raw: CoinGeckoMarketChartResponse): NormalizedPriceData {
   return { dates, prices, marketCaps, volumes };
 }
 
-// Generate mock data for fallback
-function generateMockDataForAsset(symbol: string, days: number): NormalizedPriceData {
-  const asset = getAssetBySymbol(symbol);
-  if (!asset) {
-    throw new Error(`Unknown asset: ${symbol}`);
-  }
-
-  const dates: string[] = [];
-  const prices: number[] = [];
-  const marketCaps: number[] = [];
-  const volumes: number[] = [];
-
-  const today = new Date();
-  let currentPrice = asset.fallbackBasePrice;
-  const supply = asset.fallbackBaseMcap / asset.fallbackBasePrice;
-
-  for (let i = days; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    dates.push(d.toISOString().split('T')[0]);
-
-    // Random walk for price
-    const change = (Math.random() - 0.48) * 0.05; // Slight upward bias
-    currentPrice = Math.max(0.0000001, currentPrice * (1 + change));
-    prices.push(currentPrice);
-
-    // Market cap follows price
-    const mcap = currentPrice * supply * (1 + ((days - i) / days) * 0.05);
-    marketCaps.push(mcap);
-
-    // Random volume around average
-    const volNoise = (Math.random() - 0.5) * 0.4;
-    volumes.push(asset.fallbackAvgDailyVol * (1 + volNoise));
-  }
-
-  return { dates, prices, marketCaps, volumes };
-}
-
 // Fetch single asset from CoinGecko
 async function fetchFromApi(
   coingeckoId: string,
@@ -170,7 +132,6 @@ export async function fetchAllAssetData(
   const result = new Map<string, NormalizedPriceData>();
   let dataSource: DataSource = 'real';
   let usedCache = false;
-  let usedMock = false;
 
   // Build a list of assets to fetch: default assets + custom assets
   const assetsToFetch: { symbol: string; coingeckoId: string; isCustom: boolean }[] = [];
@@ -225,21 +186,15 @@ export async function fetchAllAssetData(
     } catch (error) {
       console.warn(`Failed to fetch ${symbol} from CoinGecko:`, error);
 
-      // Try to use stale cache
+      // Try to use stale cache as last resort
       const staleCache = await cacheService.get(coingeckoId, days);
       if (staleCache) {
         console.log(`Using stale cache for ${symbol}`);
         result.set(symbol, staleCache.data);
         usedCache = true;
-      } else if (!asset.isCustom) {
-        // Fall back to mock data (only for default assets with fallback values)
-        console.log(`Using mock data for ${symbol}`);
-        const mockData = generateMockDataForAsset(symbol, days);
-        result.set(symbol, mockData);
-        usedMock = true;
       } else {
-        // Custom asset with no data - skip it
-        console.warn(`No data available for custom asset ${symbol} - skipping`);
+        // No data available - skip this asset
+        console.warn(`No data available for ${symbol} - skipping`);
       }
     }
 
@@ -252,9 +207,7 @@ export async function fetchAllAssetData(
   });
 
   // Determine data source
-  if (usedMock) {
-    dataSource = 'mock';
-  } else if (usedCache && result.size === assetsToFetch.length) {
+  if (usedCache && result.size === assetsToFetch.length) {
     dataSource = 'cached';
   }
 
@@ -286,12 +239,12 @@ export async function fetchAssetData(
   } catch (error) {
     console.warn(`Failed to fetch ${symbol}:`, error);
 
-    // Try stale cache
+    // Try stale cache as last resort
     const staleCache = await cacheService.get(coingeckoId, days);
     if (staleCache) return staleCache.data;
 
-    // Fall back to mock
-    return generateMockDataForAsset(symbol, days);
+    // No data available
+    throw new Error(`Failed to fetch data for ${symbol} and no cache available`);
   }
 }
 

@@ -14,9 +14,12 @@
  * - Stablecoins
  * - Multiple LSTs (only JITOSOL allowed at 6%)
  *
+ * Requirements:
+ *   - CoinGecko API key must be set in COINGECKO_API_KEY environment variable
+ *
  * Usage:
- *   npx tsx scripts/validate-rebalances.ts
- *   npx tsx scripts/validate-rebalances.ts --verbose
+ *   COINGECKO_API_KEY=your_key npx tsx scripts/validate-rebalances.ts
+ *   COINGECKO_API_KEY=your_key npx tsx scripts/validate-rebalances.ts --verbose
  */
 
 import {
@@ -24,8 +27,10 @@ import {
   generateComplianceReport,
   SCREENING_CONFIG,
 } from '../services/screeningService';
-import { SOLANA_ASSETS } from '../services/assetMapping';
-import { runMockBacktest } from '../services/mockBackend';
+import { SOLANA_ASSETS, getAllSymbols } from '../services/assetMapping';
+import { runBacktest } from '../services/mockBackend';
+import { fetchAllAssetData } from '../services/coingeckoService';
+import { API_CONFIG, BACKTEST_WINDOW_TO_DAYS } from '../config/apiConfig';
 import { BacktestConfig, RebalanceEvent } from '../types';
 
 const VERBOSE = process.argv.includes('--verbose');
@@ -42,6 +47,17 @@ async function main() {
   console.log('='.repeat(80));
   console.log('SECTION 4.2 CONSTITUENT-SELECTION CRITERIA VALIDATION');
   console.log('='.repeat(80));
+  console.log();
+
+  // Check for API key
+  const apiKey = process.env.COINGECKO_API_KEY;
+  if (!apiKey) {
+    console.error('ERROR: COINGECKO_API_KEY environment variable is required');
+    console.error('Usage: COINGECKO_API_KEY=your_key npx tsx scripts/validate-rebalances.ts');
+    process.exit(1);
+  }
+  API_CONFIG.setApiKey(apiKey);
+  console.log('CoinGecko API key configured');
   console.log();
 
   // 1. Asset Compliance Report
@@ -107,7 +123,15 @@ async function main() {
     console.log(`\nValidating ${config.backtestWindow} backtest (${config.numAssets} assets, ${config.rebalanceInterval})...`);
 
     try {
-      const result = await runMockBacktest(config, true);
+      // Fetch real data from CoinGecko
+      const days = BACKTEST_WINDOW_TO_DAYS[config.backtestWindow] || 365;
+      const symbols = getAllSymbols();
+
+      console.log(`  Fetching data for ${symbols.length} assets (${days} days)...`);
+      const { data: priceData, source } = await fetchAllAssetData(symbols, days);
+      console.log(`  Data source: ${source}`);
+
+      const result = await runBacktest(config, priceData, { fast: true });
 
       const validation = validateRebalanceHistory(result.rebalanceHistory, SOLANA_ASSETS);
 

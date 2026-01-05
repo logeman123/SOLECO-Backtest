@@ -23,7 +23,7 @@ export interface CachedAssetData {
 }
 
 // Data source indicator
-export type DataSource = 'real' | 'cached' | 'mock';
+export type DataSource = 'real' | 'cached';
 
 // Fetch progress callback
 export interface FetchProgress {

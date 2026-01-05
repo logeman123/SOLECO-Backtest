@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { BacktestConfig, BacktestResponse, ChartDataPoint, DeployedStrategy } from './types';
 import { CustomAsset, CustomAssetAttestation } from './types/customAsset';
-import { runMockBacktest, runBacktest, CustomAssetInfo } from './services/mockBackend';
+import { runBacktest, CustomAssetInfo } from './services/mockBackend';
 import { fetchAllAssetData, clearCache, getAllSymbols } from './services/coingeckoService';
 import { BACKTEST_WINDOW_TO_DAYS, API_CONFIG } from './config/apiConfig';
 import { DataSource, FetchProgress } from './types/coingecko';
@@ -76,7 +76,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isOptimizerOpen, setIsOptimizerOpen] = useState(false);
-  const [dataSource, setDataSource] = useState<DataSource>('mock');
+  const [dataSource, setDataSource] = useState<DataSource>('real');
   const [fetchProgress, setFetchProgress] = useState<FetchProgress | null>(null);
 
   const [deployedStrategies, setDeployedStrategies] = useState<DeployedStrategy[]>([]);
@@ -130,79 +130,59 @@ const App: React.FC = () => {
     setFetchProgress(null);
 
     try {
-      // Check if we should use real data (Live Products always requires real data)
-      const useRealData = forceRealData || (API_CONFIG.USE_REAL_DATA && API_CONFIG.getApiKey());
-
-      if (useRealData && API_CONFIG.getApiKey()) {
-        // Fetch real data from CoinGecko
-        // For custom date ranges, calculate days from startDate to today (not endDate)
-        // CoinGecko returns last N days, so we need days from startDate to NOW
-        let days: number;
-        if (cfg.startDate) {
-          const start = new Date(cfg.startDate);
-          const now = new Date();
-          days = Math.ceil((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 14; // Days from startDate to now + buffer
-        } else {
-          days = BACKTEST_WINDOW_TO_DAYS[cfg.backtestWindow] || 365;
-        }
-
-        // Get active symbols: default (minus removed) + custom assets
-        // For Strategy Workbench, use the customized universe
-        const activeSymbols = getActiveSymbols();
-        // Get coingecko IDs for custom assets
-        const customAssetIds = customAssets
-          .filter((a) => a.isIncluded)
-          .map((a) => ({ symbol: a.symbol, coingeckoId: a.coingeckoId }));
-
-        try {
-          const { data: priceData, source } = await fetchAllAssetData(activeSymbols, days, {
-            onProgress: setFetchProgress,
-            customAssetIds, // Pass custom asset CoinGecko IDs
-          });
-
-          setDataSource(source);
-
-          // Convert custom assets to CustomAssetInfo format for runBacktest
-          const customAssetInfos: CustomAssetInfo[] = customAssets
-            .filter((a) => a.isIncluded)
-            .map((a) => ({
-              symbol: a.symbol,
-              name: a.name,
-              coingeckoId: a.coingeckoId,
-              solanaLaunchOrNexus: a.attestation.solanaLaunchOrNexus,
-              primaryNetworkSolana: a.attestation.primaryNetworkSolana,
-              hasUnresolvedAuditFindings: !a.attestation.noUnresolvedAuditFindings, // Note: negation
-              category: a.category,
-            }));
-
-          // Run backtest with real data and custom assets
-          const response = await runBacktest(cfg, priceData, { customAssets: customAssetInfos });
-          setResult(response);
-
-          if (source === 'mock') {
-            setError('Some data unavailable - using simulated values for missing assets');
-          }
-        } catch (fetchErr) {
-          console.warn('Real data fetch failed, falling back to mock:', fetchErr);
-          // Fall back to mock data
-          const response = await runMockBacktest(cfg);
-          setResult(response);
-          setDataSource('mock');
-          setError('Using simulated data - real data unavailable');
-        }
-      } else if (forceRealData && !API_CONFIG.getApiKey()) {
-        // Live Products needs API key
-        setError('API key required for Live Products - please set your CoinGecko API key');
+      // API key is required for all backtests
+      if (!API_CONFIG.getApiKey()) {
+        setError('API key required - please set your CoinGecko API key');
         setShowApiKeyModal(true);
-      } else {
-        // Use mock data
-        const response = await runMockBacktest(cfg);
-        setResult(response);
-        setDataSource('mock');
+        return;
       }
+
+      // Fetch real data from CoinGecko
+      // For custom date ranges, calculate days from startDate to today (not endDate)
+      // CoinGecko returns last N days, so we need days from startDate to NOW
+      let days: number;
+      if (cfg.startDate) {
+        const start = new Date(cfg.startDate);
+        const now = new Date();
+        days = Math.ceil((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 14; // Days from startDate to now + buffer
+      } else {
+        days = BACKTEST_WINDOW_TO_DAYS[cfg.backtestWindow] || 365;
+      }
+
+      // Get active symbols: default (minus removed) + custom assets
+      // For Strategy Workbench, use the customized universe
+      const activeSymbols = getActiveSymbols();
+      // Get coingecko IDs for custom assets
+      const customAssetIds = customAssets
+        .filter((a) => a.isIncluded)
+        .map((a) => ({ symbol: a.symbol, coingeckoId: a.coingeckoId }));
+
+      const { data: priceData, source } = await fetchAllAssetData(activeSymbols, days, {
+        onProgress: setFetchProgress,
+        customAssetIds, // Pass custom asset CoinGecko IDs
+      });
+
+      setDataSource(source);
+
+      // Convert custom assets to CustomAssetInfo format for runBacktest
+      const customAssetInfos: CustomAssetInfo[] = customAssets
+        .filter((a) => a.isIncluded)
+        .map((a) => ({
+          symbol: a.symbol,
+          name: a.name,
+          coingeckoId: a.coingeckoId,
+          solanaLaunchOrNexus: a.attestation.solanaLaunchOrNexus,
+          primaryNetworkSolana: a.attestation.primaryNetworkSolana,
+          hasUnresolvedAuditFindings: !a.attestation.noUnresolvedAuditFindings, // Note: negation
+          category: a.category,
+        }));
+
+      // Run backtest with real data and custom assets
+      const response = await runBacktest(cfg, priceData, { customAssets: customAssetInfos });
+      setResult(response);
     } catch (err) {
       console.error(err);
-      setError("Failed to run simulation. Please try again.");
+      setError("Failed to run backtest. Please check your API key and try again.");
     } finally {
       setIsLoading(false);
       setFetchProgress(null);
@@ -240,9 +220,8 @@ const App: React.FC = () => {
 
   const handleApiKeySkip = () => {
     setShowApiKeyModal(false);
-    // Without API key, go to Strategy Workbench with mock data
-    setViewMode('creator');
-    handleRunBacktest(creatorConfig);
+    // API key is required - show message
+    setError('CoinGecko API key is required to run backtests. Please configure your API key.');
   };
 
   const handleChangeApiKey = () => {

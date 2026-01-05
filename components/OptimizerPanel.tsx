@@ -1,9 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
 import { BacktestConfig, SimulationResult } from '../types';
-import { runStrategyOptimizer } from '../services/mockBackend';
+import { runBacktest } from '../services/mockBackend';
+import { fetchAllAssetData, getAllSymbols } from '../services/coingeckoService';
+import { BACKTEST_WINDOW_TO_DAYS, API_CONFIG } from '../config/apiConfig';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { FlaskConical, Play, Check, ArrowRight } from 'lucide-react';
+import { FlaskConical, Play, ArrowRight } from 'lucide-react';
 
 interface OptimizerPanelProps {
   baseConfig: BacktestConfig;
@@ -11,18 +13,72 @@ interface OptimizerPanelProps {
   isOpen: boolean;
 }
 
+// Strategy optimizer that runs parameter sweeps using real data
+async function runStrategyOptimizer(baseConfig: BacktestConfig): Promise<SimulationResult[]> {
+  // Check API key
+  if (!API_CONFIG.getApiKey()) {
+    throw new Error('API key required for optimizer');
+  }
+
+  // First, fetch all data once (to avoid re-fetching for each iteration)
+  const days = BACKTEST_WINDOW_TO_DAYS[baseConfig.backtestWindow] || 365;
+  const symbols = getAllSymbols();
+  const { data: priceData } = await fetchAllAssetData(symbols, days);
+
+  // Define parameter variations
+  const numAssetsOptions = [5, 10, 15, 20, 25];
+  const maxWeightOptions = [0.15, 0.20, 0.25, 0.30];
+  const rebalanceOptions: ('weekly' | 'biweekly' | 'monthly')[] = ['weekly', 'biweekly', 'monthly'];
+
+  const results: SimulationResult[] = [];
+
+  // Run backtests for each combination
+  for (const numAssets of numAssetsOptions) {
+    for (const maxWeight of maxWeightOptions) {
+      for (const rebalanceInterval of rebalanceOptions) {
+        const config: BacktestConfig = {
+          ...baseConfig,
+          numAssets,
+          maxWeight,
+          rebalanceInterval,
+        };
+
+        try {
+          const result = await runBacktest(config, priceData, { fast: true });
+          results.push({
+            id: `sim-${numAssets}-${maxWeight}-${rebalanceInterval}`,
+            config,
+            stats: result.index.stats,
+          });
+        } catch (error) {
+          console.warn(`Optimizer iteration failed for config:`, config, error);
+        }
+      }
+    }
+  }
+
+  // Sort by Sharpe ratio (highest first)
+  results.sort((a, b) => b.stats.sharpe_ratio - a.stats.sharpe_ratio);
+
+  return results;
+}
+
 const OptimizerPanel: React.FC<OptimizerPanelProps> = ({ baseConfig, onApplyConfig, isOpen }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState<SimulationResult[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleRun = async () => {
     setIsRunning(true);
-    // Allow UI to update before freezing thread
-    setTimeout(async () => {
-        const simResults = await runStrategyOptimizer(baseConfig);
-        setResults(simResults);
-        setIsRunning(false);
-    }, 100);
+    setError(null);
+    try {
+      const simResults = await runStrategyOptimizer(baseConfig);
+      setResults(simResults);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Optimizer failed');
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   const topResults = useMemo(() => {
@@ -44,7 +100,7 @@ const OptimizerPanel: React.FC<OptimizerPanelProps> = ({ baseConfig, onApplyConf
   return (
     <div className="w-full max-w-[1800px] mx-auto mt-4 mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
         <div className="bg-lore-surface border border-lore-primary/20 rounded-lg shadow-2xl shadow-lore-primary/5 overflow-hidden relative">
-            
+
             {/* Header / Control Bar */}
             <div className="p-4 border-b border-lore-border flex flex-col md:flex-row justify-between items-center gap-4 bg-lore-surface">
                 <div className="flex items-center gap-3">
@@ -53,13 +109,16 @@ const OptimizerPanel: React.FC<OptimizerPanelProps> = ({ baseConfig, onApplyConf
                     </div>
                     <div>
                         <h3 className="text-sm font-bold text-white uppercase tracking-widest">Strategy Optimizer</h3>
-                        <p className="text-[11px] text-lore-muted">Simulate 70+ parameter combinations to maximize Sharpe Ratio.</p>
+                        <p className="text-[11px] text-lore-muted">Simulate 60+ parameter combinations to maximize Sharpe Ratio.</p>
                     </div>
                 </div>
-                
+
                 <div className="flex items-center gap-4">
+                    {error && (
+                        <span className="text-lore-error text-xs">{error}</span>
+                    )}
                     {!isRunning && !results && (
-                        <button 
+                        <button
                             onClick={handleRun}
                             className="flex items-center gap-2 px-6 py-2 bg-lore-primary hover:bg-lore-primary-glow text-lore-base font-bold rounded text-xs uppercase tracking-widest transition-all shadow-lg shadow-lore-primary/20"
                         >
@@ -73,7 +132,7 @@ const OptimizerPanel: React.FC<OptimizerPanelProps> = ({ baseConfig, onApplyConf
                         </div>
                     )}
                     {results && !isRunning && (
-                        <button 
+                        <button
                             onClick={handleRun}
                             className="flex items-center gap-2 px-4 py-2 bg-lore-highlight hover:text-white text-lore-muted font-medium rounded text-xs uppercase tracking-widest transition-colors"
                         >
@@ -86,7 +145,7 @@ const OptimizerPanel: React.FC<OptimizerPanelProps> = ({ baseConfig, onApplyConf
             {/* Content Area */}
             {results && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 border-t border-lore-border/50">
-                    
+
                     {/* LEFT: Efficient Frontier Chart */}
                     <div className="lg:col-span-2 p-6 border-r border-lore-border/50 bg-lore-base/30">
                         <h4 className="text-xs font-bold text-lore-muted uppercase tracking-widest mb-4">Risk / Return Landscape</h4>
@@ -96,8 +155,8 @@ const OptimizerPanel: React.FC<OptimizerPanelProps> = ({ baseConfig, onApplyConf
                                     <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
                                     <XAxis type="number" dataKey="x" name="Volatility" unit="%" tick={{fontSize: 10, fill: '#71717a'}} stroke="#3f3f46" label={{ value: 'Ann. Volatility', position: 'bottom', offset: 0, fill: '#71717a', fontSize: 10 }} />
                                     <YAxis type="number" dataKey="y" name="Return" unit="%" tick={{fontSize: 10, fill: '#71717a'}} stroke="#3f3f46" label={{ value: 'Ann. Return', angle: -90, position: 'insideLeft', fill: '#71717a', fontSize: 10 }} />
-                                    <Tooltip 
-                                        cursor={{ strokeDasharray: '3 3' }} 
+                                    <Tooltip
+                                        cursor={{ strokeDasharray: '3 3' }}
                                         content={({ active, payload }) => {
                                             if (active && payload && payload.length) {
                                                 const data = payload[0].payload;
@@ -145,14 +204,14 @@ const OptimizerPanel: React.FC<OptimizerPanelProps> = ({ baseConfig, onApplyConf
                                              <span className="font-mono text-xs text-lore-muted">#{idx + 1}</span>
                                              <div className="text-sm font-bold text-white">Sharpe: {res.stats.sharpe_ratio.toFixed(2)}</div>
                                          </div>
-                                         <button 
+                                         <button
                                             onClick={() => onApplyConfig(res.config)}
                                             className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[10px] uppercase font-bold text-lore-primary hover:underline"
                                          >
                                              Apply <ArrowRight size={10} />
                                          </button>
                                      </div>
-                                     
+
                                      <div className="grid grid-cols-3 gap-2 text-[10px] font-mono text-lore-muted">
                                          <div className="bg-lore-base p-1.5 rounded border border-lore-border text-center">
                                              <span className="block text-[9px] opacity-60">Assets</span>
@@ -178,12 +237,12 @@ const OptimizerPanel: React.FC<OptimizerPanelProps> = ({ baseConfig, onApplyConf
                     </div>
                 </div>
             )}
-            
+
             {!results && !isRunning && (
                  <div className="p-12 text-center text-lore-muted flex flex-col items-center justify-center h-[350px]">
                      <FlaskConical size={48} className="mb-4 opacity-20" />
                      <p className="text-sm max-w-md">
-                        The optimizer will run varying combinations of asset counts, weight caps, and rebalance schedules against the deterministic market data to find the optimal risk-adjusted return.
+                        The optimizer will run varying combinations of asset counts, weight caps, and rebalance schedules against real market data to find the optimal risk-adjusted return.
                      </p>
                  </div>
             )}

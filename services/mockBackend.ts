@@ -1,94 +1,6 @@
-
-import { BacktestConfig, BacktestResponse, FinancialStats, Constituent, UniverseStats, RebalanceEvent, UniverseSnapshotItem, DataDiscrepancy, InclusionStatus, SimulationResult } from '../types';
+import { BacktestConfig, BacktestResponse, FinancialStats, Constituent, RebalanceEvent, UniverseSnapshotItem, DataDiscrepancy, InclusionStatus } from '../types';
 import { SCREENING_CONFIG } from './screeningService';
 import { SOLANA_ASSETS, AssetDefinition } from './assetMapping';
-
-// Base Mock Assets with Methodology Properties
-interface MockAssetBase {
-  symbol: string;
-  name: string;
-  basePrice: number;
-  baseMcap: number;
-  avgDailyVol: number;
-  isNative: boolean;
-  category: 'L1' | 'DeFi' | 'Meme' | 'Infra' | 'Stablecoin' | 'LST' | 'AI' | 'DePIN' | 'NFT' | 'Other';
-  // Section 4.2 Compliance Fields
-  solanaLaunchOrNexus: boolean;
-  primaryNetworkSolana: boolean;
-  hasUnresolvedAuditFindings: boolean;
-}
-
-// 25 Specific Assets based on User Ground Truth
-// All assets include Section 4.2 compliance fields (pre-vetted)
-const REAL_SOLANA_ASSETS: MockAssetBase[] = [
-  // 1. PUMP (Massive)
-  { symbol: 'PUMP', name: 'Pump.fun', basePrice: 1.0, baseMcap: 2.96e9, avgDailyVol: 450e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-
-  // 2. JUP
-  { symbol: 'JUP', name: 'Jupiter', basePrice: 1.1, baseMcap: 1.78e9, avgDailyVol: 100e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-
-  // 3. PYTH
-  { symbol: 'PYTH', name: 'Pyth Network', basePrice: 0.35, baseMcap: 782e6, avgDailyVol: 40e6, isNative: true, category: 'Infra', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-
-  // 4. GRASS (AI)
-  { symbol: 'GRASS', name: 'Grass', basePrice: 1.5, baseMcap: 332e6, avgDailyVol: 45e6, isNative: true, category: 'AI', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-
-  // 5. ZBCN
-  { symbol: 'ZBCN', name: 'Zebec Network', basePrice: 0.003, baseMcap: 321e6, avgDailyVol: 15e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-
-  // 6. MEW
-  { symbol: 'MEW', name: 'cat in a dogs world', basePrice: 0.004, baseMcap: 300e6, avgDailyVol: 20e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-
-  // 7. TRUMP
-  { symbol: 'TRUMP', name: 'Official Trump', basePrice: 4.0, baseMcap: 150e6, avgDailyVol: 10e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-
-  // 8. ORCA
-  { symbol: 'ORCA', name: 'Orca', basePrice: 2.1, baseMcap: 110e6, avgDailyVol: 5e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-
-  // 10. POPCAT
-  { symbol: 'POPCAT', name: 'Popcat', basePrice: 0.4, baseMcap: 106e6, avgDailyVol: 10e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-
-  // 11. BOME (Corrected to ~50M)
-  { symbol: 'BOME', name: 'Book of Meme', basePrice: 0.008, baseMcap: 50e6, avgDailyVol: 15e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-
-  // 12. PENGU
-  { symbol: 'PENGU', name: 'Pudgy Penguins', basePrice: 0.05, baseMcap: 40e6, avgDailyVol: 2e6, isNative: true, category: 'NFT', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-
-  // 13. SAROS
-  { symbol: 'SAROS', name: 'Saros', basePrice: 0.005, baseMcap: 25e6, avgDailyVol: 1e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-
-  // --- LSTs & Benchmark Exclusions ---
-  { symbol: 'SOL', name: 'Solana', basePrice: 145, baseMcap: 65e9, avgDailyVol: 2e9, isNative: true, category: 'L1', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-  { symbol: 'JITOSOL', name: 'Jito Staked SOL', basePrice: 160, baseMcap: 2.5e9, avgDailyVol: 60e6, isNative: true, category: 'LST', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-
-  // --- Other High Profile for Context ---
-  { symbol: 'RENDER', name: 'Render', basePrice: 7.5, baseMcap: 3.5e9, avgDailyVol: 100e6, isNative: true, category: 'DePIN', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-  { symbol: 'WIF', name: 'dogwifhat', basePrice: 2.5, baseMcap: 2.5e9, avgDailyVol: 400e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-  { symbol: 'BONK', name: 'Bonk', basePrice: 0.000025, baseMcap: 1.5e9, avgDailyVol: 150e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-  { symbol: 'HNT', name: 'Helium', basePrice: 4.2, baseMcap: 800e6, avgDailyVol: 15e6, isNative: true, category: 'DePIN', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-  { symbol: 'RAY', name: 'Raydium', basePrice: 1.8, baseMcap: 450e6, avgDailyVol: 25e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-  { symbol: 'JTO', name: 'Jito', basePrice: 2.8, baseMcap: 380e6, avgDailyVol: 30e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-  { symbol: 'DRIFT', name: 'Drift', basePrice: 0.7, baseMcap: 150e6, avgDailyVol: 10e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-  { symbol: 'KMNO', name: 'Kamino', basePrice: 0.08, baseMcap: 80e6, avgDailyVol: 5e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-  { symbol: 'MET', name: 'Meteora', basePrice: 0.1, baseMcap: 60e6, avgDailyVol: 2e6, isNative: true, category: 'DeFi', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-  { symbol: 'FARTCOIN', name: 'Fartcoin', basePrice: 0.04, baseMcap: 30e6, avgDailyVol: 800000, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-  { symbol: 'PNUT', name: 'Peanut the Squirrel', basePrice: 0.1, baseMcap: 80e6, avgDailyVol: 5e6, isNative: true, category: 'Meme', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-  { symbol: 'W', name: 'Wormhole', basePrice: 0.35, baseMcap: 900e6, avgDailyVol: 35e6, isNative: true, category: 'Infra', solanaLaunchOrNexus: true, primaryNetworkSolana: true, hasUnresolvedAuditFindings: false },
-];
-
-// Helper: Generate date array
-const generateDates = (months: number): string[] => {
-  const dates: string[] = [];
-  const today = new Date();
-  const days = months * 30;
-  
-  for (let i = days; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    dates.push(d.toISOString().split('T')[0]);
-  }
-  return dates;
-};
 
 // Helper: Standard Deviation (exported for reuse)
 export const calculateStdDev = (arr: number[]): number => {
@@ -141,337 +53,6 @@ export const calculateStats = (nav: number[]): FinancialStats => {
   };
 };
 
-// Helper: Generate Random Walk
-const generateRandomWalk = (length: number, startValue: number, drift: number, vol: number): number[] => {
-  const nav = [startValue];
-  let current = startValue;
-  for (let i = 1; i < length; i++) {
-    const u = 1 - Math.random();
-    const v = Math.random();
-    const z = Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
-    
-    const change = drift + (vol * z);
-    current = Math.max(0.0000001, current * (1 + change));
-    nav.push(current);
-  }
-  return nav;
-};
-
-// --- DETERMINISTIC DATA GENERATION ---
-const MAX_DAYS = 36 * 30 + 30; // Buffer
-const GLOBAL_DATES = generateDates(36); // Max dates (approx 3 years)
-const GLOBAL_ASSET_DATA: Record<string, { prices: number[], mcaps: number[], vols: number[] }> = {};
-
-// Initialize Mock Data Once
-REAL_SOLANA_ASSETS.forEach(asset => {
-    const volMod = Math.max(0.5, 10e9 / asset.baseMcap); 
-    const assetVol = 0.03 + (Math.random() * 0.03 * Math.min(2, volMod)); 
-    const assetDrift = (Math.random() * 0.0025) - 0.0005;
-    
-    const prices = generateRandomWalk(GLOBAL_DATES.length, asset.basePrice, assetDrift, assetVol);
-    const supply = asset.baseMcap / asset.basePrice;
-    const mcaps = prices.map((p, idx) => p * supply * (1 + (idx/GLOBAL_DATES.length * 0.05)));
-    
-    const vols = prices.map(() => {
-        const noise = (Math.random() - 0.5) * 0.4; 
-        return asset.avgDailyVol * (1 + noise);
-    });
-    
-    GLOBAL_ASSET_DATA[asset.symbol] = { prices, mcaps, vols };
-});
-
-// Simulate discrepancies
-const simulateAuditChecks = (asset: MockAssetBase, currentVol: number): DataDiscrepancy[] => {
-  const discrepancies: DataDiscrepancy[] = [];
-  
-  if (currentVol > 180000 && currentVol < 220000) {
-    if (Math.random() < 0.3) {
-      discrepancies.push({
-        type: 'VOLUME_threshold_conflict',
-        severity: 'CRITICAL',
-        description: 'Conflicting volume reports across providers crossing $200k threshold.',
-        providerValues: {
-          'CoinGecko': `$${(currentVol * 1.05).toFixed(0)}`,
-          'Birdeye': `$${(currentVol * 0.90).toFixed(0)}`, 
-          'Jupiter': `$${(currentVol * 1.02).toFixed(0)}`,
-        },
-        contested: true
-      });
-    }
-  }
-  return discrepancies;
-};
-
-export const runMockBacktest = async (config: BacktestConfig, fast = false): Promise<BacktestResponse> => {
-  // Artificial delay for UX only if not in fast mode
-  if (!fast) {
-      await new Promise(resolve => setTimeout(resolve, 300));
-  }
-
-  // Trim to backtest window or custom date range
-  let dates: string[];
-
-  if (config.startDate && config.endDate) {
-    // Use custom date range
-    const startIdx = GLOBAL_DATES.findIndex(d => d >= config.startDate!);
-    const endIdx = GLOBAL_DATES.findIndex(d => d > config.endDate!);
-    dates = GLOBAL_DATES.slice(
-      startIdx >= 0 ? startIdx : 0,
-      endIdx >= 0 ? endIdx : GLOBAL_DATES.length
-    );
-  } else {
-    // Use backtest window
-    const monthMap: Record<string, number> = { '6M': 6, '12M': 12, '24M': 24, '36M': 36 };
-    const reqMonths = monthMap[config.backtestWindow] || 12;
-    const reqDays = reqMonths * 30;
-    const startIndex = Math.max(0, GLOBAL_DATES.length - reqDays);
-    dates = GLOBAL_DATES.slice(startIndex);
-  }
-
-  // 1. Slice Asset Data - find start index based on first date in dates array
-  const dataStartIndex = GLOBAL_DATES.indexOf(dates[0]);
-  const assetDataMap: Record<string, { prices: number[], mcaps: number[], vols: number[] }> = {};
-  REAL_SOLANA_ASSETS.forEach(asset => {
-      const fullData = GLOBAL_ASSET_DATA[asset.symbol];
-      assetDataMap[asset.symbol] = {
-          prices: fullData.prices.slice(dataStartIndex, dataStartIndex + dates.length),
-          mcaps: fullData.mcaps.slice(dataStartIndex, dataStartIndex + dates.length),
-          vols: fullData.vols.slice(dataStartIndex, dataStartIndex + dates.length)
-      };
-  });
-
-  // 2. Run Strategy
-  const fullUniverse = [...REAL_SOLANA_ASSETS];
-  const rebalanceHistory: RebalanceEvent[] = [];
-  const rebalanceIntervalDays = config.rebalanceInterval === 'weekly' ? 7 : config.rebalanceInterval === 'biweekly' ? 14 : 30;
-  
-  const weightHistoryMap: Record<string, number[]> = {};
-  fullUniverse.forEach(a => weightHistoryMap[a.symbol] = new Array(dates.length).fill(0));
-
-  let currentPortfolio: { symbol: string, shares: number, weight: number }[] = [];
-
-  for (let d = 0; d < dates.length; d++) {
-    const isRebalanceDay = d % rebalanceIntervalDays === 0 || d === 0;
-
-    if (isRebalanceDay) {
-        // --- REBALANCE LOGIC ---
-        // Apply Section 4.2 Constituent-Selection Criteria
-        const evaluatedUniverse: UniverseSnapshotItem[] = fullUniverse.map(asset => {
-            const currentVol = assetDataMap[asset.symbol].vols[d];
-            const currentMcap = assetDataMap[asset.symbol].mcaps[d];
-            const currentPrice = assetDataMap[asset.symbol].prices[d];
-
-            let status: InclusionStatus = 'INCLUDED';
-
-            // Category exclusions (Stablecoins, SOL benchmark)
-            if (asset.category === 'Stablecoin') status = 'REJECTED_CATEGORY';
-            else if (asset.symbol === 'SOL') status = 'REJECTED_CATEGORY';
-            // Criteria 1: Solana Launch or Nexus
-            else if (!asset.solanaLaunchOrNexus) status = 'REJECTED_LAUNCH';
-            // Criteria 2: Primary Network = Solana
-            else if (!asset.primaryNetworkSolana) status = 'REJECTED_PRIMARY_NETWORK';
-            // Native check
-            else if (!asset.isNative) status = 'REJECTED_NATIVE';
-            // Criteria 3: Volume threshold ($200k 30-day avg)
-            else if (currentVol < SCREENING_CONFIG.MIN_AVG_DAILY_VOLUME_USD) status = 'REJECTED_VOL';
-            // Criteria 4: Governance & Compliance
-            else if (asset.hasUnresolvedAuditFindings) status = 'REJECTED_AUDIT';
-
-            const auditFlags = simulateAuditChecks(asset, currentVol);
-
-            return {
-                assetId: `asset-${asset.symbol}`,
-                symbol: asset.symbol,
-                name: asset.name,
-                price: currentPrice,
-                mcap: currentMcap,
-                avgDailyVol: currentVol,
-                isNative: asset.isNative,
-                status,
-                weight: 0,
-                auditFlags
-            };
-        });
-
-        // LST Handling: Only allow ONE LST
-        const lstCandidates = evaluatedUniverse.filter(u => 
-            fullUniverse.find(a => a.symbol === u.symbol)?.category === 'LST' && u.status === 'INCLUDED'
-        );
-        if (lstCandidates.length > 1) {
-            lstCandidates.sort((a, b) => b.mcap - a.mcap);
-            for (let i = 1; i < lstCandidates.length; i++) {
-                lstCandidates[i].status = 'REJECTED_CATEGORY';
-            }
-        }
-
-        const candidates = evaluatedUniverse.filter(u => u.status === 'INCLUDED');
-        candidates.sort((a, b) => b.mcap - a.mcap);
-
-        const selected = candidates.slice(0, config.numAssets);
-        candidates.slice(config.numAssets).forEach(c => {
-            const originalItem = evaluatedUniverse.find(u => u.symbol === c.symbol);
-            if (originalItem) originalItem.status = 'REJECTED_RANK';
-        });
-
-        const totalRawMcap = selected.reduce((sum, item) => sum + item.mcap, 0);
-        const initialWeights = selected.map(item => ({ symbol: item.symbol, rawWeight: item.mcap / totalRawMcap }));
-        
-        let surplus = 0;
-        let weightConfig = initialWeights.map(w => {
-            if (w.rawWeight > config.maxWeight) {
-                surplus += w.rawWeight - config.maxWeight;
-                return { ...w, weight: config.maxWeight, capped: true };
-            }
-            return { ...w, weight: w.rawWeight, capped: false };
-        });
-
-        if (surplus > 0) {
-            const uncappedCount = weightConfig.filter(w => !w.capped).length;
-            if (uncappedCount > 0) {
-                weightConfig = weightConfig.map(w => !w.capped ? { ...w, weight: w.weight + (surplus/uncappedCount) } : w);
-            }
-        }
-
-        weightConfig.forEach(w => {
-            const uItem = evaluatedUniverse.find(u => u.symbol === w.symbol);
-            if (uItem) uItem.weight = w.weight;
-        });
-
-        currentPortfolio = weightConfig.map(w => {
-            const price = assetDataMap[w.symbol].prices[d];
-            return { symbol: w.symbol, shares: w.weight / price, weight: w.weight };
-        });
-
-        rebalanceHistory.push({
-            date: dates[d],
-            universeSnapshot: evaluatedUniverse,
-            totalMcap: totalRawMcap,
-            turnover: 0 
-        });
-
-    } else {
-        // --- DRIFT LOGIC ---
-        let totalVal = 0;
-        const driftPortfolio = currentPortfolio.map(p => {
-            const price = assetDataMap[p.symbol].prices[d];
-            const val = p.shares * price;
-            totalVal += val;
-            return { ...p, val };
-        });
-        
-        driftPortfolio.forEach(p => {
-            p.weight = p.val / totalVal;
-            currentPortfolio.find(cp => cp.symbol === p.symbol)!.weight = p.weight;
-        });
-    }
-
-    currentPortfolio.forEach(p => {
-        weightHistoryMap[p.symbol][d] = p.weight;
-    });
-  }
-
-  // 4. Final Response
-  const eligibleVol = fullUniverse.filter(a => {
-      const data = assetDataMap[a.symbol];
-      const avg = data.vols.reduce((x,y) => x+y, 0) / data.vols.length;
-      return avg >= 200000;
-  });
-  const failedNative = eligibleVol.filter(a => !a.isNative).length;
-  const failedVolume = fullUniverse.length - eligibleVol.length;
-  
-  const activeSymbols = Object.keys(weightHistoryMap).filter(sym => {
-      return weightHistoryMap[sym].some(w => w > 0);
-  });
-
-  const constituents: Constituent[] = activeSymbols.map(sym => {
-      const assetBase = fullUniverse.find(u => u.symbol === sym)!;
-      const data = assetDataMap[sym];
-      const weights = weightHistoryMap[sym];
-      const latestVol = data.vols[dates.length - 1];
-      const activeDiscrepancies = simulateAuditChecks(assetBase, latestVol);
-
-      return {
-        id: `asset-${sym}`,
-        symbol: sym,
-        name: assetBase.name,
-        currentWeight: weights[weights.length - 1],
-        history: { dates, prices: data.prices, marketCaps: data.mcaps, weights },
-        stats: calculateStats(data.prices),
-        activeDiscrepancies
-      };
-  }).sort((a, b) => b.currentWeight - a.currentWeight);
-
-  // Benchmark: SOL
-  const solPrices = assetDataMap['SOL'].prices;
-  const solStartPrice = solPrices[0];
-  const benchmarkNav = solPrices.map(p => (p / solStartPrice) * 100);
-  const benchmarkStats = calculateStats(benchmarkNav);
-  
-  const indexNav: number[] = [100];
-  for (let d = 1; d < dates.length; d++) {
-      let dailyRet = 0;
-      const prevWeights = activeSymbols.map(sym => ({ sym, w: weightHistoryMap[sym][d-1] }));
-      prevWeights.forEach(pw => {
-          if (pw.w > 0) {
-             const prices = assetDataMap[pw.sym].prices;
-             const r = (prices[d] / prices[d-1]) - 1;
-             dailyRet += pw.w * r;
-          }
-      });
-      indexNav.push(indexNav[d-1] * (1 + dailyRet));
-  }
-
-  return {
-    config,
-    index: { code: 'SOLECO', dates, nav: indexNav, stats: calculateStats(indexNav) },
-    benchmark: { code: 'SOL', dates, nav: benchmarkNav, stats: benchmarkStats },
-    constituents,
-    rebalanceHistory,
-    universeStats: {
-        totalEvaluated: fullUniverse.length,
-        failedVolume,
-        failedNative,
-        eligibleCount: eligibleVol.length - failedNative,
-        finalSelected: config.numAssets
-    }
-  };
-};
-
-export const runStrategyOptimizer = async (baseConfig: BacktestConfig): Promise<SimulationResult[]> => {
-    const results: SimulationResult[] = [];
-    const rebalanceOptions: BacktestConfig['rebalanceInterval'][] = ['weekly', 'biweekly', 'monthly'];
-    const assetCounts = [5, 10, 15, 20, 25];
-    const maxWeights = [0.10, 0.20, 0.30, 0.50];
-
-    // Initial Baseline Run to get Benchmark Stats
-    const baseline = await runMockBacktest(baseConfig, true);
-    const benchmarkStats = baseline.benchmark.stats;
-
-    for (const reb of rebalanceOptions) {
-        for (const assets of assetCounts) {
-            for (const maxW of maxWeights) {
-                const runConfig: BacktestConfig = {
-                    ...baseConfig,
-                    rebalanceInterval: reb,
-                    numAssets: assets,
-                    maxWeight: maxW,
-                    minWeight: 0.01 
-                };
-                const result = await runMockBacktest(runConfig, true);
-                results.push({
-                    id: `${reb}-${assets}-${maxW}`,
-                    config: runConfig,
-                    stats: result.index.stats
-                });
-            }
-        }
-    }
-    results.sort((a, b) => b.stats.sharpe_ratio - a.stats.sharpe_ratio);
-    // Attach benchmark stats to results (hacky way to pass it back if needed, or just handle in UI)
-    // For now we just return strategy results
-    return results;
-};
-
 // Interface for normalized price data from CoinGecko
 interface NormalizedPriceData {
   dates: string[];
@@ -490,6 +71,17 @@ export interface CustomAssetInfo {
   primaryNetworkSolana: boolean;
   hasUnresolvedAuditFindings: boolean;
   category?: 'DeFi' | 'Meme' | 'Infra' | 'LST' | 'AI' | 'DePIN' | 'NFT' | 'Other';
+}
+
+// Internal asset representation for backtest
+interface BacktestAsset {
+  symbol: string;
+  name: string;
+  isNative: boolean;
+  category: string;
+  solanaLaunchOrNexus: boolean;
+  primaryNetworkSolana: boolean;
+  hasUnresolvedAuditFindings: boolean;
 }
 
 // Run backtest with real price data
@@ -565,19 +157,26 @@ export const runBacktest = async (
   }
 
   // Build universe from asset mapping + custom assets
-  const defaultUniverse = REAL_SOLANA_ASSETS.filter(a => availableSymbols.includes(a.symbol));
-
-  // Convert custom assets to MockAssetBase format
-  const customUniverse: MockAssetBase[] = customAssets
+  const defaultUniverse: BacktestAsset[] = SOLANA_ASSETS
     .filter(a => availableSymbols.includes(a.symbol))
     .map(a => ({
       symbol: a.symbol,
       name: a.name,
-      basePrice: 1, // Not used for real data
-      baseMcap: 0,
-      avgDailyVol: 0,
+      isNative: a.isNative,
+      category: a.category,
+      solanaLaunchOrNexus: a.solanaLaunchOrNexus,
+      primaryNetworkSolana: a.primaryNetworkSolana,
+      hasUnresolvedAuditFindings: a.hasUnresolvedAuditFindings,
+    }));
+
+  // Convert custom assets to BacktestAsset format
+  const customUniverse: BacktestAsset[] = customAssets
+    .filter(a => availableSymbols.includes(a.symbol))
+    .map(a => ({
+      symbol: a.symbol,
+      name: a.name,
       isNative: true, // Custom assets attested as Solana native
-      category: (a.category || 'Other') as MockAssetBase['category'],
+      category: a.category || 'Other',
       solanaLaunchOrNexus: a.solanaLaunchOrNexus,
       primaryNetworkSolana: a.primaryNetworkSolana,
       hasUnresolvedAuditFindings: a.hasUnresolvedAuditFindings,
@@ -679,8 +278,6 @@ export const runBacktest = async (
           // Criteria 4: Governance & Compliance
           else if (asset.hasUnresolvedAuditFindings) status = 'REJECTED_AUDIT';
 
-          const auditFlags = simulateAuditChecks(asset, currentVol);
-
           return {
             assetId: `asset-${asset.symbol}`,
             symbol: asset.symbol,
@@ -691,7 +288,7 @@ export const runBacktest = async (
             isNative: asset.isNative,
             status,
             weight: 0,
-            auditFlags
+            auditFlags: []
           };
         });
 
@@ -795,8 +392,6 @@ export const runBacktest = async (
     const assetBase = fullUniverse.find(u => u.symbol === sym)!;
     const data = assetDataMap[sym];
     const weights = weightHistoryMap[sym];
-    const latestVol = data?.vols[backtestDates.length - 1] || 0;
-    const activeDiscrepancies = simulateAuditChecks(assetBase, latestVol);
 
     return {
       id: `asset-${sym}`,
@@ -810,7 +405,7 @@ export const runBacktest = async (
         weights
       },
       stats: calculateStats(data?.prices || []),
-      activeDiscrepancies
+      activeDiscrepancies: []
     };
   }).sort((a, b) => b.currentWeight - a.currentWeight);
 
